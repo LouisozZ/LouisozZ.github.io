@@ -1,0 +1,832 @@
+<!DOCTYPE html>
+<html lang="en">
+<head><meta name="generator" content="Hexo 3.9.0">
+    <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, user-scalable=no, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0">
+<meta http-equiv="X-UA-Compatible" content="ie=edge">
+
+
+
+<title>《Linux内核设计与实现》/第10章-内核同步方法 | LouisozZ的博客</title>
+
+
+
+    <link rel="icon" href="/head.png">
+
+
+
+
+    <!-- stylesheets list from _config.yml -->
+    
+    <link rel="stylesheet" href="/css/style.css">
+    
+
+
+
+    <!-- scripts list from _config.yml -->
+    
+    <script src="/js/script.js"></script>
+    
+    <script src="/js/tocbot.min.js"></script>
+    
+
+
+
+    
+    
+        
+    
+
+
+</head>
+<body>
+    <div class="wrapper">
+        <header>
+    <nav class="navbar">
+        <div class="container">
+            <div class="navbar-header header-logo"><a href="/">LouisozZ 的博客</a></div>
+            <div class="menu navbar-right">
+                
+                    <a class="menu-item" href="/archives">Posts</a>
+                
+                    <a class="menu-item" href="/category">Categories</a>
+                
+                    <a class="menu-item" href="/tag">Tags</a>
+                
+                    <a class="menu-item" href="/about">About</a>
+                
+                <input id="switch_default" type="checkbox" class="switch_default">
+                <label for="switch_default" class="toggleBtn"></label>
+            </div>
+
+        </div>
+    </nav>
+
+    
+    <nav class="navbar-mobile" id="nav-mobile">
+        <div class="container">
+            <div class="navbar-header">
+                <div>
+                    <a href="/">LouisozZ 的博客</a><a id="mobile-toggle-theme">·&nbsp;Light</a>
+                </div>
+                <div class="menu-toggle" onclick="mobileBtn()">&#9776; Menu</div>
+            </div>
+            <div class="menu" id="mobile-menu">
+                
+                    <a class="menu-item" href="/archives">Posts</a>
+                
+                    <a class="menu-item" href="/category">Categories</a>
+                
+                    <a class="menu-item" href="/tag">Tags</a>
+                
+                    <a class="menu-item" href="/about">About</a>
+                
+            </div>
+        </div>
+    </nav>
+
+</header>
+<script>
+    var mobileBtn = function f() {
+        var toggleMenu = document.getElementsByClassName("menu-toggle")[0];
+        var mobileMenu = document.getElementById("mobile-menu");
+        if(toggleMenu.classList.contains("active")){
+           toggleMenu.classList.remove("active")
+            mobileMenu.classList.remove("active")
+        }else{
+            toggleMenu.classList.add("active")
+            mobileMenu.classList.add("active")
+        }
+    }
+</script>
+        <div class="main">
+            <div class="container">
+    
+    
+        <div class="post-toc">
+    <div class="tocbot-list">
+    </div>
+    <div class="tocbot-list-menu">
+        <a class="tocbot-toc-expand" onclick="expand_toc()">Expand all</a>
+        <a onclick="go_top()">Back to top</a>
+        <a onclick="go_bottom()">Go to bottom</a>
+    </div>
+</div>
+
+<script>
+    document.ready(
+        function () {
+            tocbot.init({
+                tocSelector: '.tocbot-list',
+                contentSelector: '.post-content',
+                headingSelector: 'h1, h2, h3, h4, h5',
+                collapseDepth: 1,
+                orderedList: false,
+                scrollSmooth: true,
+            })
+        }
+    )
+
+    function expand_toc() {
+        var b = document.querySelector(".tocbot-toc-expand");
+        tocbot.init({
+            tocSelector: '.tocbot-list',
+            contentSelector: '.post-content',
+            headingSelector: 'h1, h2, h3, h4, h5',
+            collapseDepth: 6,
+            orderedList: false,
+            scrollSmooth: true,
+        });
+        b.setAttribute("onclick", "collapse_toc()");
+        b.innerHTML = "Collapse all"
+    }
+
+    function collapse_toc() {
+        var b = document.querySelector(".tocbot-toc-expand");
+        tocbot.init({
+            tocSelector: '.tocbot-list',
+            contentSelector: '.post-content',
+            headingSelector: 'h1, h2, h3, h4, h5',
+            collapseDepth: 1,
+            orderedList: false,
+            scrollSmooth: true,
+        });
+        b.setAttribute("onclick", "expand_toc()");
+        b.innerHTML = "Expand all"
+    }
+
+    function go_top() {
+        window.scrollTo(0, 0);
+    }
+
+    function go_bottom() {
+        window.scrollTo(0, document.body.scrollHeight);
+    }
+
+</script>
+    
+
+    
+    <article class="post-wrap">
+        <header class="post-header">
+            <h1 class="post-title">《Linux内核设计与实现》/第10章-内核同步方法</h1>
+            
+                <div class="post-meta">
+                    
+                        Author: <a itemprop="author" rel="author" href="/">LouisozZ</a>
+                    
+
+                    
+                        <span class="post-time">
+                        Date: <a href="#">August 10, 2019&nbsp;&nbsp;11:10:54</a>
+                        </span>
+                    
+                    
+                        <span class="post-category">
+                    Category:
+                            
+                                <a href="/categories/linux内核/">linux内核</a>
+                            
+                        </span>
+                    
+                </div>
+            
+        </header>
+
+        <div class="post-content">
+            <!-- # 第 10 章 &nbsp;&nbsp; 内核同步方法 -->
+<!-- TOC -->
+<ul>
+<li><a href="#原子操作">原子操作</a></li>
+<li><a href="#自旋锁-spin-lock">自旋锁 spin lock</a><ul>
+<li><a href="#自旋锁的使用">自旋锁的使用</a></li>
+<li><a href="#其他针对自旋锁的操作">其他针对自旋锁的操作</a></li>
+<li><a href="#自旋锁与下半部">自旋锁与下半部</a></li>
+</ul>
+</li>
+<li><a href="#读-写自旋锁">读-写自旋锁</a></li>
+<li><a href="#信号量">信号量</a><ul>
+<li><a href="#计数信号量与二值信号量">计数信号量与二值信号量</a></li>
+<li><a href="#创建和初始化信号量">创建和初始化信号量</a></li>
+<li><a href="#使用信号量">使用信号量</a></li>
+</ul>
+</li>
+<li><a href="#读写信号量">读写信号量</a></li>
+<li><a href="#互斥体-mutex">互斥体 MUTEX</a><ul>
+<li><a href="#信号量和互斥体">信号量和互斥体</a></li>
+<li><a href="#自旋锁和互斥体">自旋锁和互斥体</a></li>
+</ul>
+</li>
+<li><a href="#完成变量">完成变量</a></li>
+<li><a href="#顺序锁">顺序锁</a></li>
+<li><a href="#禁止抢占">禁止抢占</a></li>
+<li><a href="#顺序和屏障">顺序和屏障</a></li>
+</ul>
+<h2 id="原子操作"><a href="#原子操作" class="headerlink" title="原子操作"></a>原子操作</h2><p><strong>所谓原子操作指的是不能被分割的原子指令</strong>。内核提供了两组原子操作的接口，一组针对整数，一组针对位。在 linux 所支持的所有体系结构上，都实现了这两组接口。</p>
+<p>在使用原子操作接口的时候，引入了一个新的数据类型，原子数据类型，atomic_t，而没有直接使用 C 语言的 int 类型，这是因为：</p>
+<ol>
+<li>让原子函数只接受 atomic_t 类型的参数，可以保证原子操作只与这种类型的数据一起使用；</li>
+<li>保证该类型的数据不会被传递给非原子函数；</li>
+<li>使用 atomic_t 类型的数据可以确保编译器不对其做访问优化，使得每次取得的值总是该原子类型数据在内存上的值；</li>
+<li>在不同体系结构上实现原子操作的时候，可以通过这中间层屏蔽底层实现的差异。</li>
+</ol>
+<table>
+<thead>
+<tr>
+<th>原子整数操作</th>
+<th>描述</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>ATOMIC_INIT(int i)</td>
+<td>在声明一个 atomic_t 类型的变量时，将值初始化为 i</td>
+</tr>
+<tr>
+<td>int atomic_read(atomic_t *v)</td>
+<td>原子地读取整数原子变量 v，并返回其整数值</td>
+</tr>
+<tr>
+<td>void atomic_set(atomic_t *v, int i)</td>
+<td>原子地设置 v 的值为 i</td>
+</tr>
+<tr>
+<td>void atomic_add(int i, atomic_t *v)</td>
+<td>原子地给 v 增加 i</td>
+</tr>
+<tr>
+<td>void atomic_sub(int i, atomic_t *v)</td>
+<td>原子地从 v 减少 i</td>
+</tr>
+<tr>
+<td>void atomic_inc(atomic_t *v)</td>
+<td>原子地给 v 加 1</td>
+</tr>
+<tr>
+<td>void atomic_dec(atomic_t *v)</td>
+<td>原子地从 v 减 1</td>
+</tr>
+<tr>
+<td>int atomic_sub_and_test(int i, atomic_t *v)</td>
+<td>原子地从 v 减少 i，如果结果等于 0，返回真；否则返回假</td>
+</tr>
+<tr>
+<td>int atomic_add_negative(int i, atomic_t *v)</td>
+<td>原子地给 v 增加 i，如果结果为负数，返回真；否则返回假</td>
+</tr>
+<tr>
+<td>int atomic_add_return(int i, atomic_t *v)</td>
+<td>原子地给 v 增加 i，且返回结果</td>
+</tr>
+<tr>
+<td>int atomic_sub_return(int i, atomic_t *v)</td>
+<td>原子地从 v 减少 i，且返回结果</td>
+</tr>
+<tr>
+<td>int atomic_inc_return(int i, atomic_t *v)</td>
+<td>原子地给 v 增加 1，且返回结果</td>
+</tr>
+<tr>
+<td>int atomic_dec_return(int i, atomic_t *v)</td>
+<td>原子地从 v 减少 1，且返回结果</td>
+</tr>
+<tr>
+<td>int atomic_dec_and_test(atomic_t *v)</td>
+<td>原子地从 v 减少 1，如果结果等于 0，返回真；否则返回假</td>
+</tr>
+<tr>
+<td>int atomic_inc_and_test(atomic_t *v)</td>
+<td>原子地给 v 增加 1，如果结果等于 0，返回真；否则返回假</td>
+</tr>
+</tbody></table>
+<p><strong>原子性确保指令执行期间，要么全执行完，要么根本不执行</strong>。</p>
+<p><strong>在编写代码的时候，能使用原子操作的时候，就不要使用复杂的加锁机制，因为对多数体系结构来说，原子操作相较于更复杂的同步方法来说，给系统带来的开销更小，对高速缓存行的影响也较小。</strong> </p>
+<p>atomic_t 类型的整数原子数据是 32 位的，对应于 64 位的整数原子类型及原子操作接口，前缀都为 <code>atomic64</code> ，例如：</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">atomic64_t</span> my_atmc_data = ATOMIC64_INIT(<span class="number">5</span>);</span><br><span class="line"><span class="keyword">long</span> data = atomic64_inc_return(&amp;my_atmc_data);</span><br></pre></td></tr></table></figure>
+
+<p>上面是对整数类型的原子操作接口，还有一套针对位的原子操作接口：</p>
+<table>
+<thead>
+<tr>
+<th>原子位操作</th>
+<th>描述</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>void set_bit(int nr,void *addr)</td>
+<td>原子地设置 addr 所指对象的第 nr 位</td>
+</tr>
+<tr>
+<td>void clear_bit(int nr,void *addr)</td>
+<td>原子地清空 addr 所指对象的第 nr 位</td>
+</tr>
+<tr>
+<td>void change_bit(int nr,void *addr)</td>
+<td>原子地翻转 addr 所指对象的第 nr 位</td>
+</tr>
+<tr>
+<td>int test_and_set_bit(int nr,void *addr)</td>
+<td>原子地设置 addr 所指对象的第 nr 位，并返回原先该比特位上的值</td>
+</tr>
+<tr>
+<td>int test_and_clear_bit(int nr,void *addr)</td>
+<td>原子地清空 addr 所指对象的第 nr 位，并返回原先该比特位上的值</td>
+</tr>
+<tr>
+<td>int test_and_change_bit(int nr,void *addr)</td>
+<td>原子地翻转 addr 所指对象的第 nr 位，并返回原先该比特位上的值</td>
+</tr>
+<tr>
+<td>int test_bit(int nr,void *addr)</td>
+<td>原子地返回 addr 所指对象的第 nr 位</td>
+</tr>
+</tbody></table>
+<p><strong>为了方便起见，内核还提供了与上述接口对应的非原子操作接口，非原子接口就是在原子接口前面加上两个下划线。</strong> </p>
+<p>内核还提供了两个函数来从指定位置开始搜索第一个为 1 ，或为 0 的位：</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">int</span> <span class="title">find_first_bit</span><span class="params">(<span class="keyword">unsigned</span> <span class="keyword">long</span> *addr,<span class="keyword">unsigned</span> <span class="keyword">int</span> size)</span></span>;</span><br><span class="line"><span class="function"><span class="keyword">int</span> <span class="title">find_first_zero_bit</span><span class="params">(<span class="keyword">unsigned</span> <span class="keyword">long</span> *addr, <span class="keyword">unsigned</span> <span class="keyword">int</span> size)</span></span>;</span><br></pre></td></tr></table></figure>
+
+<p>第一个参数是一个指针，指向要搜索的起始位置，第二个参数是搜索的总位数，返回值是第一个 1 （0） 的位号。</p>
+<p><strong>原子位操作操作的是普通地址，并没有如原子整数那样引入了一个新的数据类型，并且其中的指定位号并没有限制。在 32 位机器上，如果指定了 nr 值为 32，则表示的是对下一个地址的最低位进行操作。</strong> </p>
+<h2 id="自旋锁-spin-lock"><a href="#自旋锁-spin-lock" class="headerlink" title="自旋锁 spin lock"></a>自旋锁 spin lock</h2><p>自旋锁最多只能被一个可执行线程拥有，如果当一个线程已经拥有了一个自旋锁，另一个线程想要获取这个自旋锁，那么就会一直循环，忙等待别的地方对这个自旋锁解锁。这里的忙等待就是一直在 while 探测，所以被称为自旋。如果锁没有被获取，那么请求锁的线程会立即得到它，并且继续执行。</p>
+<p><strong>一个被争用的自旋锁使得请求它的执行线程在等待锁重新可用时自旋，这种行为是自旋锁的特点</strong>。自旋的时候特别浪费处理器时间，所以自旋锁的持有时间应该尽可能短。自旋锁的使用目的就是：<strong>能够短时间内轻量级加锁。</strong> </p>
+<h3 id="自旋锁的使用"><a href="#自旋锁的使用" class="headerlink" title="自旋锁的使用"></a>自旋锁的使用</h3><figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">//自旋锁的基本使用形式</span></span><br><span class="line">DEFINE_SPINLOCK(my_lock);</span><br><span class="line">spin_lock(&amp;my_lock);</span><br><span class="line"><span class="comment">/* 临界区 */</span></span><br><span class="line">spin_unlock(&amp;my_lock);</span><br></pre></td></tr></table></figure>
+
+<p>因为自旋锁在同一时刻只能有一个线程可以持有，所以一个时刻只可能有一个线程位于临界区中，这就为多处理器机器提供了防止并发访问的保护机制。</p>
+<p><strong>警告！！！linux 实现的自旋锁是不可递归的。因为递归获取锁的时候是第二次获取锁，这时候锁已经被持有，就得等待自旋锁的解锁，但是解锁需要返回到上一层，所以就造成了上一层没有办法解锁，当前层没有办法获取锁的死锁状态。</strong></p>
+<p><strong>自旋锁可以在中断处理程序中使用，但是在获取一个自旋锁之前， 应当先关闭本地处理器的中断</strong>，否则，如果本地处理器的中断重新触发，使得又进入了这个中断处理函数（不同的中断线注册了同样的中断处理函数），那么就会造成双重请求，这次的中断因为自旋退不出来，上层的中断因为这次中断没有结束没办法继续执行以解锁，就造成了死锁。<strong>关闭的中断只需要本处理器的中断就行了，因为即使另一个处理器也执行该中断处理函数要获取自旋锁，也不会影响这个处理器的执行，所以这个处理器的自旋锁会释放，另一个处理器的代码就可以得到锁并继续执行。</strong> </p>
+<p>内核提供了禁用中断并且获取锁的接口：</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">DEFINE_SPINLOCK(my_lock);</span><br><span class="line"><span class="keyword">unsigned</span> <span class="keyword">long</span> flags;</span><br><span class="line">spin_lock_irqsave(&amp;my_lock,flags);</span><br><span class="line"><span class="comment">/* 临界区 */</span></span><br><span class="line">spin_unlock_irqrestore(&amp;my_lock,flags);</span><br></pre></td></tr></table></figure>
+
+<p>由于是可以使用在中断上下文，所以这里是需要保存当前的中断状态，然后在出临界区之后恢复到禁止之前。</p>
+<p><strong>自旋锁的加锁和解锁分别可以禁止和开启内核抢占！！！</strong> 回顾第四章 <a href="./第4章-进程调度.md#上下文切换和抢占">内核抢占</a> 中所提到的：</p>
+<blockquote>
+<p>那么什么时候重新调度是安全的呢？答案是：<strong>只要没有持有锁，重新调度就是安全的。</strong> </p>
+</blockquote>
+<blockquote>
+<p>为了支持内核抢占，在 thread_info 结构中添加了一个 preempt_count 计数器，初值为 0 ，使用锁，计数器加 1 ，释放锁，计数器减 1 。<strong>当 preempt_count 计数器为 0 ，内核可抢占执行。</strong> </p>
+</blockquote>
+<h3 id="其他针对自旋锁的操作"><a href="#其他针对自旋锁的操作" class="headerlink" title="其他针对自旋锁的操作"></a>其他针对自旋锁的操作</h3><p>要是对一个动态创建的 spinlock_t 类型的自旋锁变量进行初始化，可以使用 <code>void spin_lock_init(spinlock_t *v)</code> 这个函数接口实际使用宏实现的，不过接收的参数以及返回是符合我说列出的这个接口的。</p>
+<p>在 《linux内核设计与实现》 中文第三版中有如下说法：<br> <code>static __always_inline int spin_trylock(spinlock_t *lock)</code> 这个接口是试图获取一个自旋锁，如果该自旋锁已经被争用，那么这个方法立刻会返回一个非零值，而且不会自旋等待锁被释放；如果成功获得这个自旋锁，那么函数返回 0。</p>
+<p>下面是摘录自 <a href="https://github.com/torvalds/linux/blob/master/Documentation/kernel-hacking/locking.rst#the-trylock-functions" target="_blank" rel="noopener">Documentation/kernel-hacking/locking.rst</a> 的一段话：</p>
+<blockquote>
+<p>:c:func:<code>spin_trylock()</code> does not spin but returns non-zero if it acquires the spinlock on the first try or 0 if not. This function can be used in all contexts like :c:func:<code>spin_lock()</code>: you must have disabled the contexts that might interrupt you and acquire the spin lock.<br>:c:func:<code>mutex_trylock()</code> does not suspend your task but returns non-zero if it could lock the mutex on the first try or 0 if not. This function cannot be safely used in hardware or software interrupt contexts despite not sleeping.</p>
+</blockquote>
+<p>我读到这段话的时候是 2019.7.24，所以，现在而言，不论是 spin_trylock 还是 mutex_trylock 接口，都是锁住了返回非零，没锁住返回零，即，都可以使用下面的编程模板：</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">if</span>(XXX_trylock())&#123;</span><br><span class="line">    <span class="comment">/* 锁住 */</span></span><br><span class="line">&#125;</span><br><span class="line"><span class="keyword">else</span>&#123;</span><br><span class="line">    <span class="comment">/* 没锁住 */</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>下面是标准的自旋锁操作完整列表：</p>
+<table>
+<thead>
+<tr>
+<th>方法</th>
+<th>描述</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>spin_lock()</td>
+<td>获取指定自旋锁</td>
+</tr>
+<tr>
+<td>spin_lock_irq()</td>
+<td>禁止本地中断并且获取指定自旋锁</td>
+</tr>
+<tr>
+<td>spin_lock_irqsave()</td>
+<td>保存本地中断当前状态，禁止本地中断，并获取指定的锁</td>
+</tr>
+<tr>
+<td>spin_unlock()</td>
+<td>释放指定的锁</td>
+</tr>
+<tr>
+<td>spin_unlock_irq()</td>
+<td>释放指定的锁，并激活本地中断</td>
+</tr>
+<tr>
+<td>spin_unlock_irqrestore()</td>
+<td>释放指定的锁，并让本地中断恢复到以前状态</td>
+</tr>
+<tr>
+<td>spin_lock_init()</td>
+<td>动态初始化指定的 spinlock_t</td>
+</tr>
+<tr>
+<td>spin_trylock()</td>
+<td>试图获取指定的锁，如果获取，返回非 0;否则返回 0</td>
+</tr>
+<tr>
+<td>spin_is_locked()</td>
+<td>如果指定的锁当前正在被获取，则返回非0，否则返回 0</td>
+</tr>
+</tbody></table>
+<h3 id="自旋锁与下半部"><a href="#自旋锁与下半部" class="headerlink" title="自旋锁与下半部"></a>自旋锁与下半部</h3><p><strong>由于下半部可以抢占处于进程上下文的代码，所以当下半部与进程上下文有共享数据的时候，在获取进程中的共享数据时，不仅要加锁，还要禁止下半部。因为用户进程是不会抢占下半部执行的，所以只用考虑一个方向</strong>。函数 <code>spin_lock_bh()</code> 用于获取指定的锁，同时会禁止所有下半部的执行；<code>spin_unlock_bh()</code> 是激活下半部并解锁。</p>
+<p>上述的道理适用于中断和下半部。中断可以抢占下半部的执行，所以如果中断与下半部共享数据，那么下半部在获取共享数据的时候，应该禁止中断，同样，因为下半部不会抢占中断，所以只考虑一个方向。</p>
+<p>对于 tasklet 而言，不同种类的 tasklet 可以在不同处理器上并行执行，所以也会涉及到加锁问题，不过这里使用简单的自旋锁就行了，因为只是并行访问的问题，没有抢占，而且同一个 tasklet 是不能在不同处理器上同时执行，所以不用禁用下半部，因为即使另一个 tasklet 在自旋等待共享数据，这边的 tasklet 一定会释放锁的。</p>
+<p>对于软中断而言，只要是共享变量，只要是全局变量，都要加锁，因为同一个软中断可能在不同的处理器上同时执行，这个与 tasklet 不同。不过因为一个处理器上有软中断在执行的时候，会禁止该处理器的软中断执行，所以也不用禁止下半部，因为不会被本处理器所抢占，而自己总会释放锁，不会导致另一个处理器相同软中断的死锁。</p>
+<h2 id="读-写自旋锁"><a href="#读-写自旋锁" class="headerlink" title="读-写自旋锁"></a>读-写自旋锁</h2><p>当对某个数据结构的操作可以明确的划分出 “读/写” 或者 “消费者/生产者” 两种类别的时候，就可以使用这种读写自旋锁。</p>
+<p>读写自旋锁的规则如下：</p>
+<ol>
+<li>一个或者多个读任务可以并发的持有读者锁；</li>
+<li>写锁只能由一个写任务持有；</li>
+<li>如果当前共享变量有被持有的读锁，那么写任务需要自旋等待所有读锁释放之后才能持有写锁；</li>
+<li>当共享变量有被持有的写锁时，读任务需要自旋等待写任务释放写锁之后才能持有读锁。</li>
+</ol>
+<p>使用读写锁的时候，通常读者代码和写者代码是分开的，是属于两个分支：</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">//创建一个读写自旋锁</span></span><br><span class="line">DEFINE_RWLOCK(my_rw_lock);</span><br><span class="line"></span><br><span class="line"><span class="comment">//读者分支代码</span></span><br><span class="line">read_lock(&amp;my_rw_lock);</span><br><span class="line"><span class="comment">/* 只读临界区 */</span></span><br><span class="line">read_unlock(&amp;my_rw_lock);</span><br><span class="line"></span><br><span class="line"><span class="comment">//写者分支代码</span></span><br><span class="line">write_lock(&amp;my_rw_lock);</span><br><span class="line"><span class="comment">/* 写者临界区，可读可写 */</span></span><br><span class="line">write_unlock(&amp;my_rw_lock);</span><br></pre></td></tr></table></figure>
+
+<p>如果不注意，写出了如下逻辑的加锁代码，会导致死锁：</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">read_lock(&amp;my_rw_lock);</span><br><span class="line">write_lock(&amp;my_rw_lock);</span><br></pre></td></tr></table></figure>
+
+<p>写锁或自旋等待所有的读锁释放，包括自己的读锁，但是读锁的释放是在这个写锁之后，所以就导致了一个没法释放，一个占有等待，所以就导致了死锁。</p>
+<p>当一个共享数据在中断里面会获取其读锁的时候，那么对于所有的写操作，都应该是禁止中断的写操作，调用 <code>write_lock_irqsave()</code>，否则，如果持有了写锁，并且这时候被中断抢占，想要获取写锁，代码就锁死了。</p>
+<p>读写自旋锁的所有操作：</p>
+<table>
+<thead>
+<tr>
+<th>方法</th>
+<th>描述</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>read_lock()</td>
+<td>获得指定的读锁</td>
+</tr>
+<tr>
+<td>read_lock_irq()</td>
+<td>禁止本地中断并获得指定读锁</td>
+</tr>
+<tr>
+<td>read_lock_irqsave()</td>
+<td>保存本地中断的当前状态，禁止本地中断并且获得指定的读锁</td>
+</tr>
+<tr>
+<td>read_unlock()</td>
+<td>释放指定的读锁</td>
+</tr>
+<tr>
+<td>read_unlock_irq()</td>
+<td>释放指定的读锁，并且激活本地中断</td>
+</tr>
+<tr>
+<td>read_unlock_irqrestore()</td>
+<td>释放指定的读锁，并且恢复到指定状态</td>
+</tr>
+<tr>
+<td>write_lock()</td>
+<td>获取指定写锁</td>
+</tr>
+<tr>
+<td>write_lock_irq()</td>
+<td>禁止本地中断并且获得指定写锁</td>
+</tr>
+<tr>
+<td>write_lock_irqsave()</td>
+<td>保存本地中断的当前状态，禁止本地中断并且获得指定的写锁</td>
+</tr>
+<tr>
+<td>write_unlock()</td>
+<td>释放指定写锁</td>
+</tr>
+<tr>
+<td>write_unlock_irq()</td>
+<td>释放指定写锁，并且激活本地中断</td>
+</tr>
+<tr>
+<td>write_unlock_irqrestore()</td>
+<td>释放指定写锁，并且恢复中断到指定状态</td>
+</tr>
+<tr>
+<td>write_trylock()</td>
+<td>试图获取指定写锁，获取成功返回非 0，否则返回 0</td>
+</tr>
+<tr>
+<td>rwlock_init()</td>
+<td>初始化指定的 rwlock_t*</td>
+</tr>
+</tbody></table>
+<p>linux 的自旋锁是更对读锁友好的，因为读锁可以多方并行持有，而要持有写锁需要等待所有的读锁被释放，但是在等待读锁被释放的时间内，读者又可以获取新的读锁，而导致写锁线程的饥饿。</p>
+<h2 id="信号量"><a href="#信号量" class="headerlink" title="信号量"></a>信号量</h2><p>自旋锁的初衷，是在短时间内轻量级加锁。但是如果加锁时间变长且代码可能会睡眠，因为另一方是自旋等待，所以会浪费大量的处理器时间，所以对于这种情况下，就应该选择睡眠锁。</p>
+<p>信号量是一种睡眠锁。<strong>如果一个任务试图获取一个已经被占有的信号量，那么该任务会被推到所请求信号量对应的一个等待队列，然后修改其线程状态为挂起态（TASK_INTERRUPTIBLE or TASK_UNINTERRUPTIBLE），让其睡眠，重新调度别的程序执行，所以信号量被称为睡眠锁</strong>。</p>
+<p>由上面的描述可以知道，信号量的开销，至少是有两次上下文切换，一次是睡眠切出，一次是被唤醒的切入。而自旋锁，其开销就是在等待上面。</p>
+<p>可以从信号量的睡眠特性上得出一些结论：</p>
+<ol>
+<li>争用信号量的进程在等待信号量的时候会睡眠，所以信号量适用于锁会被长时间持有的情况。</li>
+<li>如果锁被短时间持有，那么就不适合使用信号量，因为睡眠、维护等待队列以及唤醒，所花费的开销可能比锁被占有的时间还要长。</li>
+<li>由于执行线程在争用锁的时候会睡眠，所以信号量只能在进程上下文中才能获得，不能使用于中断上下文，因为中断上下文是不能被调度的。</li>
+<li>可以在持有信号量之后睡眠，因为别的争用信号量的进程得不到信号量也只是睡眠等待而已，不会造成死锁。</li>
+<li>在占用信号量的同时，不能占用自旋锁。因为持有信号量的时候也可能会睡眠，但是这时候又持有自旋锁，而自旋锁是不允许睡眠的。</li>
+</ol>
+<p>至于何时使用自旋锁，何时使用信号量，首先判断当前获取锁的进程是否会睡眠，如果会。那么也只能选择信号量；如果不会，那么就要根据持有锁的时间长短来作为主要参考，持有时间短，自旋锁，持有时间长，信号量。</p>
+<p><strong>信号量不同于自旋锁，他不会禁止内核抢占，所以持有信号量的代码是可以抢占的，被抢占的情况就相当于他主动睡眠了，其余的争用信号量的进程也是同他一起在睡眠而已。</strong> </p>
+<h3 id="计数信号量与二值信号量"><a href="#计数信号量与二值信号量" class="headerlink" title="计数信号量与二值信号量"></a>计数信号量与二值信号量</h3><p>信号量可以同时允许任意数量的锁持有者，而自旋锁在一个时刻只允许有一个持有者。信号量允许的持有者数量被称为使用者数量，简称为数量。信号的使用者数量值为 1 的时候，这就是一个二值信号量，或互斥信号量；如果大于 1 ，就是计数信号量。</p>
+<p>信号量支持两个原子操作，P() 和 V()，这里的 pv 是来自荷兰语 Proberen 以及 Vershogen，前者表示测试，后者表示增加。在 linux 系统里面，他们对应的接口是 down() 以及 up() 。<strong>down() 操作通过对信号量减一来请求获取一个信号量，如果减一之后的结果是 0 或者大于0，获取该信号量，任务进入临界区。如果结果为负数，则该任务会被放入到等待队列，处理器执行其他任务（也就是这里会执行一次调度）。当临界区的操作完成之后，up() 操作用来释放信号量，会将信号量的数值增加一。up()操作会检车该信号量的等待队列是否为空，如果不为空，那么处于等待队列中的任务在被唤醒的时候会获得该信号量。</strong> </p>
+<h3 id="创建和初始化信号量"><a href="#创建和初始化信号量" class="headerlink" title="创建和初始化信号量"></a>创建和初始化信号量</h3><figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">//互斥信号量的静态创建</span></span><br><span class="line"><span class="function"><span class="keyword">static</span> <span class="title">DECLARE_MUTEX</span><span class="params">(name)</span></span>;</span><br><span class="line"></span><br><span class="line"><span class="comment">//计数信号量静态声明以初始化</span></span><br><span class="line"><span class="class"><span class="keyword">struct</span> <span class="title">semaphore</span> <span class="title">name</span>;</span></span><br><span class="line">sema_init(&amp;name,count);</span><br><span class="line"></span><br><span class="line"><span class="comment">//对动态创建的 semaphore 进行初始化的接口</span></span><br><span class="line"><span class="function"><span class="keyword">void</span> <span class="title">sema_init</span><span class="params">(struct semaphore *name,<span class="keyword">unsigned</span> <span class="keyword">int</span> count)</span></span>;  <span class="comment">//计数信号量</span></span><br><span class="line"><span class="function"><span class="keyword">void</span> <span class="title">init_MUTEX</span><span class="params">(struct semaphore *name)</span></span>;                    <span class="comment">//互斥信号量</span></span><br></pre></td></tr></table></figure>
+
+<h3 id="使用信号量"><a href="#使用信号量" class="headerlink" title="使用信号量"></a>使用信号量</h3><p>获取信号量的函数有两个，<code>down()</code> 和 <code>down_interruptible()</code>。他们的区别在于当信号量不可获得进入睡眠状态的时候，<code>down()</code> 使得进程的状态变为 TASK_UNINTERRUPTIBLE，不可被 <strong>信号</strong> （不是信号量！！）唤醒，只能等待 <strong>信号量</strong> 可用；而 <code>down_interruptible()</code> 是将进程状态改变为 TASK_INTERRUPTIBLE，可以被 <strong>信号</strong> 唤醒，唤醒之后，函数 <code>down_interruptible()</code> 返回 -EINTR。</p>
+<p><strong>注意！！！号外！！！linux 反人类又来了！！！</strong></p>
+<p>前面讲了三个 trylock()，<code>spin_trylock()</code>、<code>mutex_trylock()</code>、<code>write_trylock()</code>，他们，<strong>都是锁住了返回非零，没锁住返回零。可是！！！<code>down_trylock()</code> 他是反的！！！没锁住返回非零，锁住了返回零！！！</strong></p>
+<p>我就想吐槽一下，能统一不？你们自己写代码的时候不累吗？</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">//一会儿是</span></span><br><span class="line"><span class="keyword">if</span>(spin_trylock())&#123;</span><br><span class="line">    <span class="comment">/* 锁住 */</span></span><br><span class="line">&#125;</span><br><span class="line"><span class="keyword">else</span>&#123;</span><br><span class="line">    <span class="comment">/* 没锁住 */</span></span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="comment">//一会儿又是</span></span><br><span class="line">lock_fail = down_trylock();</span><br></pre></td></tr></table></figure>
+
+<p>也不是不讲道理，遵循系统调用接口的一般返回值特性，正常返回的是 0 ，否则返回非零错误码，好，down_trylock 没错；遵循语义，if(spin_trylock())，也没错，但是你倒是统一啊！！！嫌 bug 太少了是吧。</p>
+<p>针对信号量方法的3完整列表：</p>
+<table>
+<thead>
+<tr>
+<th>方法</th>
+<th>描述</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>sema_init(struct semaphore *,int)</td>
+<td>以指定数值初始化动态创建的信号量</td>
+</tr>
+<tr>
+<td>init_MUTEX(struct semaphore *)</td>
+<td>以计数值 1 初始化动态创建的信号量</td>
+</tr>
+<tr>
+<td>init_MUTEX_LOCKED(struct semaphore *)</td>
+<td>以计数值 0 初始化动态创建的信号量，即初始化为已加锁状态</td>
+</tr>
+<tr>
+<td>down_interruptible(struct semaphore *)</td>
+<td>尝试获取执行信号量，如果信号量被争用，则进入可中断睡眠状态</td>
+</tr>
+<tr>
+<td>down(struct semaphore *)</td>
+<td>尝试获取指定信号量，如果信号量已经被争用，则进入不可中断睡眠状态</td>
+</tr>
+<tr>
+<td>down_trylock(struct semaphore *)</td>
+<td>尝试获取信号量，如果信号量已经被争用，直接返回非 0，否则返回 0</td>
+</tr>
+<tr>
+<td>up(struct semaphore *)</td>
+<td>释放指定的信号量（加一），如果睡眠队列不为空，唤醒其中一个任务</td>
+</tr>
+</tbody></table>
+<h2 id="读写信号量"><a href="#读写信号量" class="headerlink" title="读写信号量"></a>读写信号量</h2><p>读写信号量和信号量之间的关系，与自旋锁和读写自旋锁之间的关系类似。读写信号量在内核中，是由 rw_semaphore 结构体表示。</p>
+<p>所有的读写信号量都是互斥信号量，只对写者互斥。并发持有读锁的读者数量不限，但也是只有唯一的写者可以获取写锁。所有的读写信号量都不会被信号打断。</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">//静态创建一个读写信号量</span></span><br><span class="line"><span class="function"><span class="keyword">static</span> <span class="title">DECLARE_RWSEM</span><span class="params">(name)</span></span>;</span><br><span class="line"></span><br><span class="line"><span class="comment">//动态创建的读写信号量用一下函数初始化</span></span><br><span class="line">init_rwsem(struct rw_semaphore *sem);</span><br><span class="line"></span><br><span class="line">down_read(&amp;name);</span><br><span class="line"><span class="comment">/* 只读临界区 */</span></span><br><span class="line">up_read(&amp;name);</span><br><span class="line"></span><br><span class="line"><span class="comment">/*=======================================*/</span></span><br><span class="line"></span><br><span class="line">down_write(&amp;name);</span><br><span class="line"><span class="comment">/* 写者的读写临界区 */</span></span><br><span class="line">up_write(&amp;name);</span><br></pre></td></tr></table></figure>
+
+<p>读写信号量也提供了 <code>down_read_trylock()</code> 和 <code>down_write_trylock()</code> 方法。 呵呵 ，呵呵，呵呵，他们都是锁住了返回非 0，没锁住返回 0。与信号量自己的都是反的，呵呵呵呵。</p>
+<h2 id="互斥体-MUTEX"><a href="#互斥体-MUTEX" class="headerlink" title="互斥体 MUTEX"></a>互斥体 MUTEX</h2><p>互斥体也是一种睡眠锁，相较于信号量而言是一种更简单的强制互斥睡眠锁，而且互斥体可以自动调试。</p>
+<p>mutex 的行为和使用计数为 1 的信号量行为类似，但是实现更高效，而且使用也有更强的限制。</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">//静态定义</span></span><br><span class="line">DEFINE_MUTEX(name)；</span><br><span class="line"></span><br><span class="line"><span class="comment">//动态初始化</span></span><br><span class="line">mutex_init(&amp;file_mutex);</span><br><span class="line"></span><br><span class="line"><span class="comment">//构建临界区</span></span><br><span class="line">mutex_lock(&amp;file_mutex);</span><br><span class="line"><span class="comment">/* 临界区 */</span></span><br><span class="line">mutex_unlock(&amp;file_mutex);</span><br></pre></td></tr></table></figure>
+
+<p>mutex 的基本操作列表</p>
+<table>
+<thead>
+<tr>
+<th>方法</th>
+<th>描述</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>mutex_lock(struct mutex *)</td>
+<td>为指定的 mutex 上锁，如果锁不可用则睡眠</td>
+</tr>
+<tr>
+<td>mutex_unlock(struct mutex *)</td>
+<td>为指定的 mutex 解锁</td>
+</tr>
+<tr>
+<td>mutex_trylock(struct mutex *)</td>
+<td>尝试获取锁，成功锁住返回 1，否则返回 0</td>
+</tr>
+<tr>
+<td>mutex_is_locked(struct mutex *)</td>
+<td>如果锁被争用返回 1，否则返回 0</td>
+</tr>
+</tbody></table>
+<p>mutex 的使用场景更严格：</p>
+<ol>
+<li>任何时刻，只能有一个任务可以持有 mutex 锁；</li>
+<li><strong>给 mutex 上锁者必须为其解锁！</strong> 不能在一个上下文中锁定一个 mutex，然后在另一个上下文中为其解锁。但是信号量和自旋锁可以。</li>
+<li>递归上锁和解锁是不允许的。不能对已经加锁的 mutex 再加锁，同样也不能对一个已经解锁的 mutex 再解锁。</li>
+<li>当持有一个 mutex 的时候，进程不可以退出（是不能被调度的意思吗？）。</li>
+<li>mutex 不能在中断或者下半部中使用，同样，也不能使用 mutex_trylock();</li>
+<li>mutex 只能通过官方 API 进行管理，不能拷贝、手动初始化或者重复初始化。</li>
+</ol>
+<h3 id="信号量和互斥体"><a href="#信号量和互斥体" class="headerlink" title="信号量和互斥体"></a>信号量和互斥体</h3><p>除非上述 mutex 的某个约束条件妨碍你的代码实现，否则相比于信号量，优先使用 mutex。其实一般只有靠近底层的时候才会需要使用信号量。</p>
+<h3 id="自旋锁和互斥体"><a href="#自旋锁和互斥体" class="headerlink" title="自旋锁和互斥体"></a>自旋锁和互斥体</h3><p><strong>在中断上下文中，只能使用自旋锁</strong>，在任务睡眠的时候只能使用互斥体（信号量）。</p>
+<p>加锁选择的建议：</p>
+<table>
+<thead>
+<tr>
+<th>需求</th>
+<th>建议加锁方法</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>低开销加锁</td>
+<td>优先使用自旋锁</td>
+</tr>
+<tr>
+<td>短期加锁</td>
+<td>优先使用自旋锁</td>
+</tr>
+<tr>
+<td>长期加锁</td>
+<td>优先使用互斥体</td>
+</tr>
+<tr>
+<td>中断上下文中加锁</td>
+<td>使用自旋锁</td>
+</tr>
+<tr>
+<td>持有锁需要睡眠</td>
+<td>使用互斥体</td>
+</tr>
+</tbody></table>
+<h2 id="完成变量"><a href="#完成变量" class="headerlink" title="完成变量"></a>完成变量</h2><p>好像和系统接口的条件变量有点相似。</p>
+<p>如果在内核中一个任务需要发出信号通知另一个任务发生了某个特定事件，利用 <strong>完成变量</strong> 可以做到。</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line">DECLARE_COMPLETION(my_comp);</span><br><span class="line"></span><br><span class="line">threadA()&#123;</span><br><span class="line">    ...</span><br><span class="line">    wait_for_completion(&amp;my_comp);</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line">threadB()&#123;</span><br><span class="line">    ...</span><br><span class="line">    <span class="comment">//finish something</span></span><br><span class="line">    complete(&amp;my_comp);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>等待任务调用 <code>wait_for_completion(&amp;my_comp)</code> 在指定的完成变量上等待事件发生；而另一个任务当完成某个事件的时候调用 <code>complete(&amp;my_comp)</code> 来给等待的任务发送信号以唤醒继续执行。</p>
+<table>
+<thead>
+<tr>
+<th>方法</th>
+<th>描述</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>init_completion(struct completion *)</td>
+<td>初始化指定的动态创建的完成变量</td>
+</tr>
+<tr>
+<td>wait_for_completion(struct completion *)</td>
+<td>等待指定的完成变量接收信号</td>
+</tr>
+<tr>
+<td>complete(struct completion*)</td>
+<td>发送信号唤醒任何等待的任务</td>
+</tr>
+</tbody></table>
+<h2 id="顺序锁"><a href="#顺序锁" class="headerlink" title="顺序锁"></a>顺序锁</h2><p>简称 seq 锁，是在 2.6 版本中才引入的新型锁。</p>
+<p><strong>实现这种锁主要依靠一个序列计数器</strong>。 序列计数器的初值是 0，读锁只会读取序列计数器值，不会修改；而写锁是递增改变序列计数器的值：当获得写锁的时候，序列计数器值加一，此时在写者临界区中，序列计数器值为奇数；当写者完成工作之后释放写锁，序列计数器值再加一，又变成了偶数。而读者在读之前和读之后都会读取序列计数器值并检查。</p>
+<ol>
+<li>如果前后两次读取的序列计数器值相同，则表示读取过程中没有被写者修改过；</li>
+<li>如果在读之前读取的序列计数器值是奇数，表明当前正有写者在修改数据，读者不能读取数据（如下例程中，会一直循环）；</li>
+<li>如果读之前是偶数，读完之后发现这次读取到的序列计数器值与读取数据之前的序列计数器值不同，那么就表明期间该数据被写者修改了（也会导致 while 判断条件为真）；</li>
+</ol>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br></pre></td><td class="code"><pre><span class="line"><span class="function">u64 <span class="title">get_giffies_64</span><span class="params">(<span class="keyword">void</span>)</span></span>&#123;</span><br><span class="line">    <span class="keyword">unsigned</span> <span class="keyword">long</span> seq;</span><br><span class="line">    u64 ret;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">do</span>&#123;</span><br><span class="line">        seq = read_seqbegin(&amp;xtime_lock);</span><br><span class="line">        ret = jiffies_64;</span><br><span class="line">    &#125;<span class="keyword">while</span>(read_seqretry(&amp;xtime_lock,seq));</span><br><span class="line">    <span class="keyword">return</span> ret;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="comment">//在定时器中断中，则是更新共享变量 jiffies_64</span></span><br><span class="line">write_seqlock(&amp;xtime_lock);</span><br><span class="line">jiffies_64 += <span class="number">1</span>;</span><br><span class="line">write_sequnlock(&amp;xtime_lock);</span><br></pre></td></tr></table></figure>
+
+<h2 id="禁止抢占"><a href="#禁止抢占" class="headerlink" title="禁止抢占"></a>禁止抢占</h2><p>对于每个处理器特有数据，即只有这个处理器才会去访问，那么其实可以不用锁，但是却会出现在该处理器上某个进程再处理这个数据的时候，执行了调度，发生了内核抢占，新的被调度的程序也会处理这个数据，就造成了数据的破坏。</p>
+<p>为了解决上面的问题，在不加锁的情况下，可以通过禁止内核抢占来达到对处理器特有数据的同步效果。</p>
+<p>之前在讲调度的时候，说到过：</p>
+<blockquote>
+<p>为了支持内核抢占，在 thread_info 结构中添加了一个 preempt_count 计数器，初值为 0 ，使用锁，计数器加 1 ，释放锁，计数器减 1 。<strong>当 preempt_count 计数器为 0 ，内核可抢占执行。</strong> </p>
+</blockquote>
+<p>下面接口中所说的计数值就是指的该变量的值：</p>
+<table>
+<thead>
+<tr>
+<th>函数</th>
+<th>描述</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>preempt_disable()</td>
+<td>增加抢占计数值，从而禁止该内核抢占</td>
+</tr>
+<tr>
+<td>preempt_enable()</td>
+<td>减少抢占计数值，并当该值降为 0 时检查和执行被挂起的需要调度的任务</td>
+</tr>
+<tr>
+<td>preempt_enable_no_resched()</td>
+<td>激活内核抢占但不再检查任何被挂起的需要调度的任务</td>
+</tr>
+<tr>
+<td>preempt_count()</td>
+<td>返回抢占计数值</td>
+</tr>
+</tbody></table>
+<p>preempt_disable() 和 preempt_enable() 是可以嵌套调用的，当 preempt_disable)() 调用了 N 次，那么 preempt_enable() 也要调用 N 次才是真正的开启了内核抢占。</p>
+<p><strong>禁止内核抢占相关接口是有效的，对原子操作以及睡眠的调试方法。</strong> </p>
+<h2 id="顺序和屏障"><a href="#顺序和屏障" class="headerlink" title="顺序和屏障"></a>顺序和屏障</h2><p>当处理多处理器之间或者硬件设备之间的同步问题时，有时需要在你的程序代码中以指定的顺序发出读内存、写内存指令。有时候的需求是按照写的顺序来读数据。但是编译器和处理器为了优化，可能会对没有明显关联的读与写进行重新排序。拿处理器来说，因为使用的是流水线技术，所以要是相邻语句有同时使用共同部件的情况，那么就可能从后面的语句中，挑出与这两条语句不相干的，然后插入到这两条语句中间执行，就能提高处理器的吞吐率。</p>
+<p>但是上述的优化操作，会在确实存在依赖关系，但是依赖关系不明显的多个变量间，产生数据操作与预期不符的情况。这时候就需要使用 <strong>屏障（barriers）</strong> 来保证数据的操作顺序是按照预期顺序在执行。</p>
+<p><strong>rmb() 方法提供读内存屏障（Read Memory Barriers），确保跨越 rmb() 这条语句的读取动作不会发生重排。换句话说，在 rmb() 之前的读取动作不会被重排到 rmb() 语句之后，同样，在 rmb() 之后的读语句，也不会被重排到 rmb() 之前。</strong></p>
+<p><strong>wmb() 提供的是写内存屏障，与 rmb() 使用方法一样，不过就是针对的是写操作的重排。</strong> </p>
+<p><strong>mb() 提供的就是读写屏障。read_barrier_depends() 提供的是依赖数据之间的读屏障。</strong></p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line">a = <span class="number">3</span>;</span><br><span class="line">mb();</span><br><span class="line">p = &amp;a;</span><br><span class="line"><span class="comment">//确保，先将a置为3，再将p置为a的地址</span></span><br><span class="line"></span><br><span class="line">pp = p;</span><br><span class="line">read_barrier_depends();</span><br><span class="line">b = *pp;</span><br><span class="line"><span class="comment">//b 的辅助依赖于 p，所以使用这个接口，保证了先将 pp 设置为 p，在将 pp 所在内存值赋给 b</span></span><br></pre></td></tr></table></figure>
+
+<p><strong>barrier() 方法可以防止编译器跨屏障对载入或者存储操作进行优化。他只防止编译器可能重排指令</strong></p>
+<table>
+<thead>
+<tr>
+<th>屏障</th>
+<th>描述</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>rmb()</td>
+<td>阻止跨越屏障的载入动作发生重排序</td>
+</tr>
+<tr>
+<td>read_barrier_depends()</td>
+<td>阻止跨越屏障的具有数据依赖关系的载入动作重排序</td>
+</tr>
+<tr>
+<td>wmb()</td>
+<td>阻止快约屏障的存储动作发生重排序</td>
+</tr>
+<tr>
+<td>mb()</td>
+<td>阻止跨越屏障的载入和存储动作重新排序</td>
+</tr>
+<tr>
+<td>smp_rmb()</td>
+<td>在 SMP 上提供 rmb() 功能，在 UP 上提供 barrier() 功能</td>
+</tr>
+<tr>
+<td>smp_read_barrier_depends()</td>
+<td>在 SMP 上提供 read_barrier_depends() 功能，在 UP 上提供 barrier() 功能</td>
+</tr>
+<tr>
+<td>smp_wmb()</td>
+<td>在 SMP 上提供 wmb() 功能，在 UP 上提供 barrier() 功能</td>
+</tr>
+<tr>
+<td>smp_mb()</td>
+<td>在 SMP 上提供 mb() 功能，在 UP 上提供 barrier() 功能</td>
+</tr>
+<tr>
+<td>barrier()</td>
+<td>阻止编译器跨屏障对载入或存储操作进行优化</td>
+</tr>
+</tbody></table>
+
+        </div>
+
+        
+            <section class="post-copyright">
+                
+                    <p class="copyright-item">
+                        <span>Author:</span>
+                        <span>LouisozZ</span>
+                    </p>
+                
+                
+                    <p class="copyright-item">
+                        <span>Permalink:</span>
+                        <span><a href="http://louisozz.github.io/post/2019/linux内核设计与实现/第10章内核同步方法/">http://louisozz.github.io/post/2019/linux内核设计与实现/第10章内核同步方法/</a></span>
+                    </p>
+                
+                
+                    <p class="copyright-item">
+                        <span>License:</span>
+                        <span>Copyright (c) 2019 <a href="http://creativecommons.org/licenses/by-nc/4.0/">CC-BY-NC-4.0</a> LICENSE</span>
+                    </p>
+                
+                
+                     <p class="copyright-item">
+                         <span>Slogan:</span>
+                         <span>Do you believe in <strong>DESTINY<strong>?</strong></strong></span>
+                     </p>
+                
+
+            </section>
+        
+        <section class="post-tags">
+            <div>
+                <span>Tag(s):</span>
+                <span class="tag">
+                    
+                    
+                        <a href="/tags/linux/"># linux</a>
+                    
+                        
+                </span>
+            </div>
+            <div>
+                <a href="javascript:window.history.back();">back</a>
+                <span>· </span>
+                <a href="/">home</a>
+            </div>
+        </section>
+        <section class="post-nav">
+            
+                <a class="prev" rel="prev" href="/post/2019/linux内核设计与实现/第11章-定时器和时间管理/">《Linux内核设计与实现》/第11章-定时器和时间管理</a>
+            
+            
+            <a class="next" rel="next" href="/post/2019/linux内核设计与实现/第9章-内核同步介绍/">《Linux内核设计与实现》/第9章-内核同步介绍</a>
+            
+        </section>
+
+
+    </article>
+</div>
+
+        </div>
+        <footer id="footer" class="footer">
+    <div class="copyright">
+        <span>© LouisozZ | Powered by <a href="https://hexo.io" target="_blank">Hexo</a> & <a href="https://github.com/Siricee/hexo-theme-Chic" target="_blank">Chic</a></span>
+    </div>
+</footer>
+
+    </div>
+</body>
+</html>

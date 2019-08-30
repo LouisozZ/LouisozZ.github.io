@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+<html lang="en">
+<head><meta name="generator" content="Hexo 3.9.0">
+    <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, user-scalable=no, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0">
+<meta http-equiv="X-UA-Compatible" content="ie=edge">
+
+
+
+<title>《Linux内核设计与实现》/第6章-内核数据结构 | LouisozZ的博客</title>
+
+
+
+    <link rel="icon" href="/head.png">
+
+
+
+
+    <!-- stylesheets list from _config.yml -->
+    
+    <link rel="stylesheet" href="/css/style.css">
+    
+
+
+
+    <!-- scripts list from _config.yml -->
+    
+    <script src="/js/script.js"></script>
+    
+    <script src="/js/tocbot.min.js"></script>
+    
+
+
+
+    
+    
+        
+    
+
+
+</head>
+<body>
+    <div class="wrapper">
+        <header>
+    <nav class="navbar">
+        <div class="container">
+            <div class="navbar-header header-logo"><a href="/">LouisozZ 的博客</a></div>
+            <div class="menu navbar-right">
+                
+                    <a class="menu-item" href="/archives">Posts</a>
+                
+                    <a class="menu-item" href="/category">Categories</a>
+                
+                    <a class="menu-item" href="/tag">Tags</a>
+                
+                    <a class="menu-item" href="/about">About</a>
+                
+                <input id="switch_default" type="checkbox" class="switch_default">
+                <label for="switch_default" class="toggleBtn"></label>
+            </div>
+
+        </div>
+    </nav>
+
+    
+    <nav class="navbar-mobile" id="nav-mobile">
+        <div class="container">
+            <div class="navbar-header">
+                <div>
+                    <a href="/">LouisozZ 的博客</a><a id="mobile-toggle-theme">·&nbsp;Light</a>
+                </div>
+                <div class="menu-toggle" onclick="mobileBtn()">&#9776; Menu</div>
+            </div>
+            <div class="menu" id="mobile-menu">
+                
+                    <a class="menu-item" href="/archives">Posts</a>
+                
+                    <a class="menu-item" href="/category">Categories</a>
+                
+                    <a class="menu-item" href="/tag">Tags</a>
+                
+                    <a class="menu-item" href="/about">About</a>
+                
+            </div>
+        </div>
+    </nav>
+
+</header>
+<script>
+    var mobileBtn = function f() {
+        var toggleMenu = document.getElementsByClassName("menu-toggle")[0];
+        var mobileMenu = document.getElementById("mobile-menu");
+        if(toggleMenu.classList.contains("active")){
+           toggleMenu.classList.remove("active")
+            mobileMenu.classList.remove("active")
+        }else{
+            toggleMenu.classList.add("active")
+            mobileMenu.classList.add("active")
+        }
+    }
+</script>
+        <div class="main">
+            <div class="container">
+    
+    
+        <div class="post-toc">
+    <div class="tocbot-list">
+    </div>
+    <div class="tocbot-list-menu">
+        <a class="tocbot-toc-expand" onclick="expand_toc()">Expand all</a>
+        <a onclick="go_top()">Back to top</a>
+        <a onclick="go_bottom()">Go to bottom</a>
+    </div>
+</div>
+
+<script>
+    document.ready(
+        function () {
+            tocbot.init({
+                tocSelector: '.tocbot-list',
+                contentSelector: '.post-content',
+                headingSelector: 'h1, h2, h3, h4, h5',
+                collapseDepth: 1,
+                orderedList: false,
+                scrollSmooth: true,
+            })
+        }
+    )
+
+    function expand_toc() {
+        var b = document.querySelector(".tocbot-toc-expand");
+        tocbot.init({
+            tocSelector: '.tocbot-list',
+            contentSelector: '.post-content',
+            headingSelector: 'h1, h2, h3, h4, h5',
+            collapseDepth: 6,
+            orderedList: false,
+            scrollSmooth: true,
+        });
+        b.setAttribute("onclick", "collapse_toc()");
+        b.innerHTML = "Collapse all"
+    }
+
+    function collapse_toc() {
+        var b = document.querySelector(".tocbot-toc-expand");
+        tocbot.init({
+            tocSelector: '.tocbot-list',
+            contentSelector: '.post-content',
+            headingSelector: 'h1, h2, h3, h4, h5',
+            collapseDepth: 1,
+            orderedList: false,
+            scrollSmooth: true,
+        });
+        b.setAttribute("onclick", "expand_toc()");
+        b.innerHTML = "Expand all"
+    }
+
+    function go_top() {
+        window.scrollTo(0, 0);
+    }
+
+    function go_bottom() {
+        window.scrollTo(0, document.body.scrollHeight);
+    }
+
+</script>
+    
+
+    
+    <article class="post-wrap">
+        <header class="post-header">
+            <h1 class="post-title">《Linux内核设计与实现》/第6章-内核数据结构</h1>
+            
+                <div class="post-meta">
+                    
+                        Author: <a itemprop="author" rel="author" href="/">LouisozZ</a>
+                    
+
+                    
+                        <span class="post-time">
+                        Date: <a href="#">August 6, 2019&nbsp;&nbsp;11:10:54</a>
+                        </span>
+                    
+                    
+                        <span class="post-category">
+                    Category:
+                            
+                                <a href="/categories/linux内核/">linux内核</a>
+                            
+                        </span>
+                    
+                </div>
+            
+        </header>
+
+        <div class="post-content">
+            <!-- # 第 6 章 &nbsp;&nbsp; 内核数据结构 -->
+
+<!-- TOC -->
+<ul>
+<li><a href="#链表">链表</a><ul>
+<li><a href="#获取数据结构指针">获取数据结构指针</a></li>
+<li><a href="#定义一个链表">定义一个链表</a></li>
+<li><a href="#链表的其他操作">链表的其他操作</a></li>
+<li><a href="#遍历链表">遍历链表</a></li>
+</ul>
+</li>
+<li><a href="#队列">队列</a><ul>
+<li><a href="#队列初始化创建队列">队列初始化（创建队列）</a></li>
+<li><a href="#数据入队">数据入队</a></li>
+<li><a href="#从队列摘取数据">从队列摘取数据</a></li>
+<li><a href="#有关队列长度的函数">有关队列长度的函数</a></li>
+<li><a href="#重置与释放">重置与释放</a></li>
+</ul>
+</li>
+<li><a href="#映射">映射</a><ul>
+<li><a href="#初始化一个映射表">初始化一个映射表</a></li>
+<li><a href="#分配一个新的-uid">分配一个新的 UID</a></li>
+<li><a href="#查找映射表">查找映射表</a></li>
+<li><a href="#删除映射表项">删除映射表项</a></li>
+<li><a href="#撤销映射表">撤销映射表</a></li>
+</ul>
+</li>
+</ul>
+<p>linux 内核已经实现了基本的数据结构，而且也提供了一套例程来管理所实现的数据结构，所以当进行内核编程的时候，应该尽可能使用内核所提供的，就像在使用 STL 的时候要使用其提供的容器和迭代器一样。</p>
+<p>接下来要描述的基本数据结构有链表、队列、映射、二叉树。</p>
+<h2 id="链表"><a href="#链表" class="headerlink" title="链表"></a>链表</h2><p>一般我们在实现链表的时候，都是将数据作为链表中的一个成员，也就是将数据嵌入到链表中：</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="class"><span class="keyword">struct</span> <span class="title">list</span>&#123;</span></span><br><span class="line">    <span class="keyword">void</span>* data;</span><br><span class="line">    <span class="class"><span class="keyword">struct</span> <span class="title">list</span> *<span class="title">next</span>;</span></span><br><span class="line">    <span class="class"><span class="keyword">struct</span> <span class="title">list</span> *<span class="title">prev</span>;</span></span><br><span class="line">&#125;;</span><br></pre></td></tr></table></figure>
+
+<p>但是在 linux 内核里面，是将链表嵌入到数据里面：</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">//数据结构</span></span><br><span class="line"><span class="class"><span class="keyword">struct</span> <span class="title">location</span>&#123;</span></span><br><span class="line">    uint32 longitude;   <span class="comment">//经度</span></span><br><span class="line">    uint32 latitude;    <span class="comment">//纬度</span></span><br><span class="line">&#125;;</span><br><span class="line"><span class="comment">//改造为链表之后的数据结构</span></span><br><span class="line"><span class="class"><span class="keyword">struct</span> <span class="title">location</span>&#123;</span></span><br><span class="line">    uint32 longitude;   <span class="comment">//经度</span></span><br><span class="line">    uint32 latitude;    <span class="comment">//纬度</span></span><br><span class="line">    <span class="class"><span class="keyword">struct</span> <span class="title">list_head</span> <span class="title">location_list</span>;</span>  <span class="comment">//这样，struct location 就可以形成链表</span></span><br><span class="line">&#125;;</span><br></pre></td></tr></table></figure>
+
+<p>其中，<code>struct list_head</code> 类型就是内核实现的链表结构：</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="class"><span class="keyword">struct</span> <span class="title">list_head</span>&#123;</span></span><br><span class="line">    <span class="class"><span class="keyword">struct</span> <span class="title">list_head</span>* <span class="title">next</span>;</span></span><br><span class="line">    <span class="class"><span class="keyword">struct</span> <span class="title">list_head</span>* <span class="title">prev</span>;</span></span><br><span class="line">&#125;;</span><br></pre></td></tr></table></figure>
+
+<p><strong>由此可见，list_head 本身是没有任何意义的，他只有嵌入到你的数据结构中才有意义。</strong> </p>
+<p>这样虽然是实现了链表，但是不论采用哪种数据结构，最终的目的都是为了管理数据，我们操作的也是数据，所以 linux 内核提供了一系列接口来管理这种方式实现的链表。</p>
+<h3 id="获取数据结构指针"><a href="#获取数据结构指针" class="headerlink" title="获取数据结构指针"></a>获取数据结构指针</h3><p>我们可以通过宏 <code>container_of</code> 来获得指向整个数据类型结构体的指针：</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">#<span class="meta-keyword">define</span> container_of(list_ptr,type,member)  (&#123;           \</span></span><br><span class="line">    <span class="function"><span class="keyword">const</span> <span class="title">typeof</span><span class="params">(((type *)<span class="number">0</span>)-&gt;member)</span> *__mptr </span>= list_ptr;\</span><br><span class="line">    (type *)( (<span class="keyword">char</span> *)(__mptr) - offsetof(type,member) );&#125;)</span><br><span class="line"></span><br><span class="line"><span class="meta">#<span class="meta-keyword">define</span> list_entry(list_ptr,type,member) \</span></span><br><span class="line">        container_of(list_ptr,type,member)</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">int</span> <span class="title">main</span><span class="params">()</span></span></span><br><span class="line"><span class="function"></span>&#123;</span><br><span class="line">    ...</span><br><span class="line">    <span class="class"><span class="keyword">struct</span> <span class="title">location</span> <span class="title">x</span>;</span></span><br><span class="line">    <span class="class"><span class="keyword">struct</span> <span class="title">list_head</span> <span class="title">some_list</span> = <span class="title">x</span>.<span class="title">location_list</span>;</span></span><br><span class="line">    <span class="class"><span class="keyword">struct</span> <span class="title">location</span> *<span class="title">date_ptr</span> = <span class="title">list_entry</span>(&amp;<span class="title">some_list</span>,<span class="title">struct</span> <span class="title">location</span>,<span class="title">location_list</span>);</span></span><br><span class="line">    <span class="comment">//data_ptr == &amp;x</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>对 <code>container_of</code> 的解释：</p>
+<p>首先要知道，传递到 type 和 member 的分别是 <strong>类型的名字</strong> 和 <strong>成员的名字</strong>。</p>
+<ol>
+<li>typeof 获取其参数的类型。<strong>如果参数是一个表达式，不做计算</strong>。因为 type 和 member 都是名字，宏经过预处理字符替换了这两个名字，在编译阶就是获取了名为 type 结构体中 member 成员的类型，声明的 __mptr 类型就是 member 的指针类型，再获取到参数 list_ptr 的值，就得到了它在内存的地址。</li>
+<li><strong>offsetof 计算一个类型中，某个成员距离该类型起始位置的偏移值</strong>。通过之前得到的 member 在内存的地址，减去偏移值，得到整个数据成员在内存的起始地址，强转成该类型的指针，就得到了指向这个数据类型的指针。</li>
+</ol>
+<h3 id="定义一个链表"><a href="#定义一个链表" class="headerlink" title="定义一个链表"></a>定义一个链表</h3><figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">#<span class="meta-keyword">define</span> LIST_HEAD_INIT(name) &#123; &amp;(name), &amp;(name) &#125;</span></span><br><span class="line"></span><br><span class="line"><span class="meta">#<span class="meta-keyword">define</span> LIST_HEAD(name) \</span></span><br><span class="line">	<span class="class"><span class="keyword">struct</span> <span class="title">list_head</span> <span class="title">name</span> = <span class="title">LIST_HEAD_INIT</span>(<span class="title">name</span>)</span></span><br><span class="line"><span class="class"></span></span><br><span class="line"><span class="class"><span class="title">static</span> <span class="title">inline</span> <span class="title">void</span> <span class="title">INIT_LIST_HEAD</span>(<span class="title">struct</span> <span class="title">list_head</span> *<span class="title">list</span>)</span></span><br><span class="line"><span class="class">&#123;</span></span><br><span class="line">	WRITE_ONCE(<span class="built_in">list</span>-&gt;next, <span class="built_in">list</span>);</span><br><span class="line">	<span class="built_in">list</span>-&gt;prev = <span class="built_in">list</span>;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">int</span> <span class="title">main</span><span class="params">()</span></span></span><br><span class="line"><span class="function"></span>&#123;</span><br><span class="line">    ...</span><br><span class="line">    <span class="class"><span class="keyword">struct</span> <span class="title">location</span> <span class="title">x</span>;</span></span><br><span class="line">    x.longitude = <span class="number">12342</span>;</span><br><span class="line">    x.latitude = <span class="number">83242</span>;</span><br><span class="line">    INIT_LIST_HEAD(&amp;(x.location_list));</span><br><span class="line"></span><br><span class="line">    <span class="class"><span class="keyword">struct</span> <span class="title">location</span> <span class="title">y</span> = &#123;</span></span><br><span class="line">        <span class="number">12342</span>,</span><br><span class="line">        <span class="number">83242</span>,</span><br><span class="line">        LIST_HEAD_INIT(y.location_list),</span><br><span class="line">    &#125;;</span><br><span class="line"></span><br><span class="line">    LIST_HEAD(my_location_head);</span><br><span class="line">    ...</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>从上面的两个宏加一个内联可以看出，<strong>对一个链表的初始化就是让其前驱后继指针都指向自己</strong>；<strong>定义一个链表头，就是声明一个名为宏参数的 struct list_head 类型变量。</strong></p>
+<h3 id="链表的其他操作"><a href="#链表的其他操作" class="headerlink" title="链表的其他操作"></a>链表的其他操作</h3><figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">//======== 向 head 节点后面插入节点 new ========//</span></span><br><span class="line">list_add(struct list_head *<span class="keyword">new</span>,struct list_head *head);</span><br><span class="line"><span class="comment">//例程</span></span><br><span class="line">list_add(&amp;(y.location_list),&amp;my_location_head);</span><br><span class="line"></span><br><span class="line"><span class="comment">//======== 向 head 节点前面插入节点 new ========//</span></span><br><span class="line">list_add_tail(struct list_head *<span class="keyword">new</span>,struct list_head *head);</span><br><span class="line"><span class="comment">//例程</span></span><br><span class="line">list_add_tail(&amp;(y.location_list),&amp;my_location_head);</span><br><span class="line"></span><br><span class="line"><span class="comment">//======== 把节点 entry 从其所在链表中移除。但是并没有释放内存 ========//</span></span><br><span class="line">list_del(struct list_head *entry);</span><br><span class="line"><span class="comment">//例程</span></span><br><span class="line">list_del(&amp;(y.location_list));</span><br><span class="line"></span><br><span class="line"><span class="comment">//======== 把节点 entry 从其所在链表中移除。但是并没有释放内存,并且对 entry 调用 INIT_LIST_HEAD(entry) ========//</span></span><br><span class="line">list_del_inti(struct list_head *entry);</span><br><span class="line"><span class="comment">//例程</span></span><br><span class="line">list_del_inti(&amp;(y.location_list));</span><br><span class="line"></span><br><span class="line"><span class="comment">//======== 把 new 节点从其所在链表中移除，并且将其插入到 head 节点后面 ========//</span></span><br><span class="line">list_move(struct list_head *<span class="keyword">new</span>,struct list_head *head);</span><br><span class="line"><span class="comment">//例程</span></span><br><span class="line">list_move(&amp;(y.location_list),&amp;my_location_head);</span><br><span class="line"></span><br><span class="line"><span class="comment">//======== 把 new 节点从其所在链表中移除，并且将其插入到 head 节点前面 ========//</span></span><br><span class="line">list_move_tail(struct list_head *<span class="keyword">new</span>,struct list_head *head);</span><br><span class="line"><span class="comment">//例程</span></span><br><span class="line">list_move_tail(&amp;(y.location_list),&amp;my_location_head);</span><br><span class="line"></span><br><span class="line"><span class="comment">//======== 判断链表是否为空，空则返回非 0 ，否则返回 0  ========//</span></span><br><span class="line">list_empty(struct list_head *entry);</span><br><span class="line"><span class="comment">//例程</span></span><br><span class="line">list_empty(&amp;(y.location_list));</span><br></pre></td></tr></table></figure>
+
+<h3 id="遍历链表"><a href="#遍历链表" class="headerlink" title="遍历链表"></a>遍历链表</h3><figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">/**</span></span><br><span class="line"><span class="comment"> * list_for_each	-	iterate over a list</span></span><br><span class="line"><span class="comment"> * @pos:	the &amp;struct list_head to use as a loop cursor.</span></span><br><span class="line"><span class="comment"> * @head:	the head for your list.</span></span><br><span class="line"><span class="comment"> */</span></span><br><span class="line"><span class="meta">#<span class="meta-keyword">define</span> list_for_each(pos, head) \</span></span><br><span class="line">	<span class="keyword">for</span> (pos = (head)-&gt;next; pos != (head); pos = pos-&gt;next)</span><br><span class="line"></span><br><span class="line"><span class="comment">/**</span></span><br><span class="line"><span class="comment"> * list_for_each_prev	-	iterate over a list backwards</span></span><br><span class="line"><span class="comment"> * @pos:	the &amp;struct list_head to use as a loop cursor.</span></span><br><span class="line"><span class="comment"> * @head:	the head for your list.</span></span><br><span class="line"><span class="comment"> */</span></span><br><span class="line"><span class="meta">#<span class="meta-keyword">define</span> list_for_each_prev(pos, head) \</span></span><br><span class="line">	<span class="keyword">for</span> (pos = (head)-&gt;prev; pos != (head); pos = pos-&gt;prev)</span><br><span class="line"></span><br><span class="line"><span class="comment">/**</span></span><br><span class="line"><span class="comment"> * list_for_each_entry	-	iterate over list of given type</span></span><br><span class="line"><span class="comment"> * @pos:	the type * to use as a loop cursor.</span></span><br><span class="line"><span class="comment"> * @head:	the head for your list.</span></span><br><span class="line"><span class="comment"> * @member:	the name of the list_head within the struct.</span></span><br><span class="line"><span class="comment"> */</span></span><br><span class="line"><span class="meta">#<span class="meta-keyword">define</span> list_for_each_entry(pos, head, member)				\</span></span><br><span class="line">	<span class="keyword">for</span> (pos = list_first_entry(head, typeof(*pos), member);	\</span><br><span class="line">	     &amp;pos-&gt;member != (head);					\</span><br><span class="line">	     pos = list_next_entry(pos, member))</span><br><span class="line"></span><br><span class="line"><span class="comment">/**</span></span><br><span class="line"><span class="comment"> * list_for_each_entry_safe - iterate over list of given type safe against removal of list entry</span></span><br><span class="line"><span class="comment"> * @pos:	the type * to use as a loop cursor.</span></span><br><span class="line"><span class="comment"> * @n:		another type * to use as temporary storage</span></span><br><span class="line"><span class="comment"> * @head:	the head for your list.</span></span><br><span class="line"><span class="comment"> * @member:	the name of the list_head within the struct.</span></span><br><span class="line"><span class="comment"> */</span></span><br><span class="line"><span class="meta">#<span class="meta-keyword">define</span> list_for_each_entry_safe(pos, n, head, member)			\</span></span><br><span class="line">	<span class="keyword">for</span> (pos = list_first_entry(head, typeof(*pos), member),	\</span><br><span class="line">		n = list_next_entry(pos, member);			\</span><br><span class="line">	     &amp;pos-&gt;member != (head); 					\</span><br><span class="line">	     pos = n, n = list_next_entry(n, member))</span><br></pre></td></tr></table></figure>
+
+<h2 id="队列"><a href="#队列" class="headerlink" title="队列"></a>队列</h2><h3 id="队列初始化（创建队列）"><a href="#队列初始化（创建队列）" class="headerlink" title="队列初始化（创建队列）"></a>队列初始化（创建队列）</h3><p>有动态和静态创建方法，不过动态创建更为普遍：</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">int</span> <span class="title">kfifo_alloc</span><span class="params">(struct kfifo *fifo, <span class="keyword">unsigned</span> <span class="keyword">int</span> size, <span class="keyword">gfp_t</span> gfp_mask)</span></span>;</span><br><span class="line"></span><br><span class="line"><span class="comment">//e.g.</span></span><br><span class="line"><span class="function"><span class="keyword">int</span> <span class="title">main</span><span class="params">()</span></span></span><br><span class="line"><span class="function"></span>&#123;</span><br><span class="line">    <span class="class"><span class="keyword">struct</span> <span class="title">kfifo</span> <span class="title">fifo</span>;</span></span><br><span class="line">    <span class="keyword">int</span> ret;</span><br><span class="line"></span><br><span class="line">    ret = kfifo_alloc(&amp;fifo,PAGE_SIZE,GFP_KERNEL);</span><br><span class="line">    <span class="keyword">if</span>(ret)</span><br><span class="line">        <span class="keyword">return</span> ret;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>上述代码中的 kfifo 就是内核实现的队列数据结构。<code>kfifo_alloc</code> 的第二个参数是创建的队列的大小，单位是字节，并且这个值必须是 2 的幂。最后一个参数是被用来标识分配的内存，在内存管理一章（12章）会讲到。<strong>如果 kfifo_alloc 分配成功返回 0 ，否则返回负数错误码。</strong> </p>
+<p>另外，还可以使用自己分配的缓冲区：</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">void</span> <span class="title">kfifo_init</span><span class="params">(struct kfifo *fifo, <span class="keyword">void</span>* buffer,<span class="keyword">unsigned</span> <span class="keyword">int</span> size)</span></span>;</span><br></pre></td></tr></table></figure>
+
+<p>该函数创建并初始化一个 kfifo 对象，这个队列使用的内存，是由 buffer 所指向的，长度为 size 字节的内存，同样的，size 的值也是 2 的幂。</p>
+<h3 id="数据入队"><a href="#数据入队" class="headerlink" title="数据入队"></a>数据入队</h3><p>当一个 kfifo 对象创建并初始化之后，使用 kfifo_in() 来将数据入队：</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">unsigned</span> <span class="keyword">int</span> <span class="title">kfifo_in</span><span class="params">(struct kfifo *fifo, <span class="keyword">const</span> <span class="keyword">void</span>* from,<span class="keyword">unsigned</span> <span class="keyword">int</span> len)</span></span>;</span><br></pre></td></tr></table></figure>
+
+<p>该函数将 from 指向地址，长度为 len 字节的数据拷贝到队列尾，返回实际拷贝到队列中的字节数。如果当前队列的剩余空闲字节数小于 len，那么返回值可能小于 len，表示只拷贝了返回值大小字节的数据到队列；返回值也可能等于 0 ，表示没有数据被拷贝到队列中。</p>
+<h3 id="从队列摘取数据"><a href="#从队列摘取数据" class="headerlink" title="从队列摘取数据"></a>从队列摘取数据</h3><p>使用 kfifo_out() 从指定队列中摘取数据：</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">unsigned</span> <span class="keyword">int</span> <span class="title">kfifo_out</span><span class="params">(struct kfifo *fifo, <span class="keyword">void</span>* to,<span class="keyword">unsigned</span> <span class="keyword">int</span> len)</span></span>;</span><br></pre></td></tr></table></figure>
+
+<p>从队列头拷贝 len 个字节到 to 所指向的地址，如果成功，返回拷贝的数据长度，如果返回值小于 len ，则表示拷贝的数据量小于需求。<strong>该函数执行了之后，返回值大小的字节就不再存在于队列中。</strong> </p>
+<p>若是想只读拷贝，而不将数据从队列中删除，那么可以使用：</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">unsigned</span> <span class="keyword">int</span> <span class="title">kfifo_out_peek</span><span class="params">(struct kfifo *fifo, <span class="keyword">void</span>* to,<span class="keyword">unsigned</span> <span class="keyword">int</span> len,<span class="keyword">unsigned</span> <span class="keyword">int</span> offset)</span></span>;</span><br></pre></td></tr></table></figure>
+
+<p>其中除了最后一个参数可以指定读取的起始位置，其余参数意义与 kfifo_out 相同。</p>
+<h3 id="有关队列长度的函数"><a href="#有关队列长度的函数" class="headerlink" title="有关队列长度的函数"></a>有关队列长度的函数</h3><figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">//获取队列总大小</span></span><br><span class="line"><span class="function"><span class="keyword">static</span> <span class="keyword">inline</span> <span class="keyword">unsigned</span> <span class="keyword">int</span> <span class="title">kfifo_size</span><span class="params">(struct kfifo *fifo)</span></span>;</span><br><span class="line"><span class="comment">//队列中已经推入的数据量</span></span><br><span class="line"><span class="function"><span class="keyword">static</span> <span class="keyword">inline</span> <span class="keyword">unsigned</span> <span class="keyword">int</span> <span class="title">kfifo_len</span><span class="params">(struct kfifo *fifo)</span></span>;</span><br><span class="line"><span class="comment">//队列空闲数据量</span></span><br><span class="line"><span class="function"><span class="keyword">static</span> <span class="keyword">inline</span> <span class="keyword">unsigned</span> <span class="keyword">int</span> <span class="title">kfifo_avail</span><span class="params">(struct kfifo *fifo)</span></span>;</span><br><span class="line"><span class="comment">//判断队列是否空，是否满</span></span><br><span class="line"><span class="function"><span class="keyword">static</span> <span class="keyword">inline</span> <span class="keyword">int</span> <span class="title">kfifo_is_empty</span><span class="params">(struct kfifo *fifo)</span></span>;</span><br><span class="line"><span class="function"><span class="keyword">static</span> <span class="keyword">inline</span> <span class="keyword">int</span> <span class="title">kfifo_is_full</span><span class="params">(struct kfifo *fifo)</span></span>;</span><br></pre></td></tr></table></figure>
+
+<h3 id="重置与释放"><a href="#重置与释放" class="headerlink" title="重置与释放"></a>重置与释放</h3><figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">//reset 重置，丢弃队列中所有的数据</span></span><br><span class="line"><span class="function"><span class="keyword">static</span> <span class="keyword">inline</span> <span class="keyword">void</span> <span class="title">kfifo_reset</span><span class="params">(struct kfifo *fifo)</span></span>;</span><br><span class="line"><span class="comment">//释放掉队列所占用的内存，如果是使用的 kfifo_init 来创建的队列，那么程序员有义务释放掉内存。</span></span><br><span class="line"><span class="function"><span class="keyword">void</span> <span class="title">kfifo_free</span><span class="params">(struct kfifo *fifo)</span></span>;</span><br></pre></td></tr></table></figure>
+
+<h2 id="映射"><a href="#映射" class="headerlink" title="映射"></a>映射</h2><p>映射，也称为关联数组，是一个由唯一键组成的集合，并且每一个键会关联一个特定的值，这种键到值的关联关系就是映射。</p>
+<p><strong>linux 内核提供的映射结构是一个唯一ID（UID）到一个 void* 类型指针的映射关系</strong>。这个映射结构体被命名为 idr 。linux 使用平衡二叉树来实现的映射结构。</p>
+<h3 id="初始化一个映射表"><a href="#初始化一个映射表" class="headerlink" title="初始化一个映射表"></a>初始化一个映射表</h3><figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">void</span> <span class="title">init_idr</span><span class="params">(struct idr* idp)</span></span>;</span><br><span class="line"></span><br><span class="line"><span class="comment">//e.g.</span></span><br><span class="line"><span class="class"><span class="keyword">struct</span> <span class="title">idr</span> <span class="title">my_idr</span>;</span>      <span class="comment">//静态定义</span></span><br><span class="line">init_idr(&amp;my_idr);      <span class="comment">//初始化</span></span><br></pre></td></tr></table></figure>
+
+<h3 id="分配一个新的-UID"><a href="#分配一个新的-UID" class="headerlink" title="分配一个新的 UID"></a>分配一个新的 UID</h3><p>一旦建立了一个映射表，就可以从这个映射表中分配出新的 UID 了。<strong>注意，这里的 UID 并非是用户ID， 而是唯一ID。</strong> 分配一个新的 UID 需要两个步骤：</p>
+<ol>
+<li>告知映射表，你期望请求一个新的 UID；这个步骤可能会导致映射表扩充当前结构大小。对应的接口是： <code>int idr_pre_get(struct idr *idp,gfp_mask);</code> 如果真的需要调整大小而请求内存，则由 gfp_mask 来标记新分配的内存。<strong>idr_pre_get() 成功返回 1 ，失败返回 0 ！！！</strong> </li>
+<li>实际去获取新的 UID，并将这个 UID 加入到指定的映射表中。对应的接口是：<code>int idr_get_new(struct idr *idp,void* ptr,int* id);</code> 该接口从 idp 指向的映射表中去分配 UID 保存在 id 中，并且关联指针 ptr。<strong>成功返回 0 ，否则返回非 0 错误码。</strong><br>还有一个接口，功能与 idr_get_new() 几乎相同，只是可以指定，获取的 UID 的最小值：<code>int idr_get_new_above(struct idr *idp,void* ptr,int start_id,int* id);</code> 获取到的 UID 一定是大于等于 start_id 的。</li>
+</ol>
+<h3 id="查找映射表"><a href="#查找映射表" class="headerlink" title="查找映射表"></a>查找映射表</h3><figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">void</span>* <span class="title">idr_find</span><span class="params">(struct idr *idp,<span class="keyword">int</span> id)</span></span>;</span><br></pre></td></tr></table></figure>
+
+<p>该接口功能是：在映射表 idp 中，寻找 UID 为 id 的节点，如果找到了，就返回与其关联的指针值，否则返回 NULL；<strong>注意，如果加入映射表的时候，用 NULL 来获取一个关联的 UID， 那么这里返回的也会是 NULL ，所以最好不要关联一个 NULL 指针到映射表。</strong> </p>
+<h3 id="删除映射表项"><a href="#删除映射表项" class="headerlink" title="删除映射表项"></a>删除映射表项</h3><figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">void</span> <span class="title">idr_remove</span><span class="params">(struct idr *idp,<span class="keyword">int</span> id)</span></span>;</span><br></pre></td></tr></table></figure>
+
+<p>如果 idr_remove() 执行成功，那么会删除这个 UID 以及与其相关联的指针。</p>
+<h3 id="撤销映射表"><a href="#撤销映射表" class="headerlink" title="撤销映射表"></a>撤销映射表</h3><figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">void</span> <span class="title">idr_destroy</span><span class="params">(struct idr *idp)</span></span>;</span><br></pre></td></tr></table></figure>
+
+<p>如果函数执行成功，只会释放掉 idq 中未使用的内存，已经产生了映射关系的节点是不能被 idr_destroy() 的动作删除的。如果想要释放掉这个映射表占用的所有内存，可以先对 idp 调用 idr_remove_all(idp); 再调用 idr_destroy(idp) 就可以了。</p>
+
+        </div>
+
+        
+            <section class="post-copyright">
+                
+                    <p class="copyright-item">
+                        <span>Author:</span>
+                        <span>LouisozZ</span>
+                    </p>
+                
+                
+                    <p class="copyright-item">
+                        <span>Permalink:</span>
+                        <span><a href="http://louisozz.github.io/post/2019/linux内核设计与实现/第6章-内核数据结构/">http://louisozz.github.io/post/2019/linux内核设计与实现/第6章-内核数据结构/</a></span>
+                    </p>
+                
+                
+                    <p class="copyright-item">
+                        <span>License:</span>
+                        <span>Copyright (c) 2019 <a href="http://creativecommons.org/licenses/by-nc/4.0/">CC-BY-NC-4.0</a> LICENSE</span>
+                    </p>
+                
+                
+                     <p class="copyright-item">
+                         <span>Slogan:</span>
+                         <span>Do you believe in <strong>DESTINY<strong>?</strong></strong></span>
+                     </p>
+                
+
+            </section>
+        
+        <section class="post-tags">
+            <div>
+                <span>Tag(s):</span>
+                <span class="tag">
+                    
+                    
+                        <a href="/tags/linux/"># linux</a>
+                    
+                        
+                </span>
+            </div>
+            <div>
+                <a href="javascript:window.history.back();">back</a>
+                <span>· </span>
+                <a href="/">home</a>
+            </div>
+        </section>
+        <section class="post-nav">
+            
+                <a class="prev" rel="prev" href="/post/2019/linux内核设计与实现/第7章-中断和中断处理/">《Linux内核设计与实现》/第7章-中断和中断处理</a>
+            
+            
+            <a class="next" rel="next" href="/post/2019/linux内核设计与实现/第5章-系统调用/">《Linux内核设计与实现》/第5章-系统调用</a>
+            
+        </section>
+
+
+    </article>
+</div>
+
+        </div>
+        <footer id="footer" class="footer">
+    <div class="copyright">
+        <span>© LouisozZ | Powered by <a href="https://hexo.io" target="_blank">Hexo</a> & <a href="https://github.com/Siricee/hexo-theme-Chic" target="_blank">Chic</a></span>
+    </div>
+</footer>
+
+    </div>
+</body>
+</html>

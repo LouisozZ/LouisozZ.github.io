@@ -1,0 +1,497 @@
+<!DOCTYPE html>
+<html lang="en">
+<head><meta name="generator" content="Hexo 3.9.0">
+    <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, user-scalable=no, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0">
+<meta http-equiv="X-UA-Compatible" content="ie=edge">
+
+
+
+<title>《Linux内核设计与实现》/第4章-进程调度 | LouisozZ的博客</title>
+
+
+
+    <link rel="icon" href="/head.png">
+
+
+
+
+    <!-- stylesheets list from _config.yml -->
+    
+    <link rel="stylesheet" href="/css/style.css">
+    
+
+
+
+    <!-- scripts list from _config.yml -->
+    
+    <script src="/js/script.js"></script>
+    
+    <script src="/js/tocbot.min.js"></script>
+    
+
+
+
+    
+    
+        
+    
+
+
+</head>
+<body>
+    <div class="wrapper">
+        <header>
+    <nav class="navbar">
+        <div class="container">
+            <div class="navbar-header header-logo"><a href="/">LouisozZ 的博客</a></div>
+            <div class="menu navbar-right">
+                
+                    <a class="menu-item" href="/archives">Posts</a>
+                
+                    <a class="menu-item" href="/category">Categories</a>
+                
+                    <a class="menu-item" href="/tag">Tags</a>
+                
+                    <a class="menu-item" href="/about">About</a>
+                
+                <input id="switch_default" type="checkbox" class="switch_default">
+                <label for="switch_default" class="toggleBtn"></label>
+            </div>
+
+        </div>
+    </nav>
+
+    
+    <nav class="navbar-mobile" id="nav-mobile">
+        <div class="container">
+            <div class="navbar-header">
+                <div>
+                    <a href="/">LouisozZ 的博客</a><a id="mobile-toggle-theme">·&nbsp;Light</a>
+                </div>
+                <div class="menu-toggle" onclick="mobileBtn()">&#9776; Menu</div>
+            </div>
+            <div class="menu" id="mobile-menu">
+                
+                    <a class="menu-item" href="/archives">Posts</a>
+                
+                    <a class="menu-item" href="/category">Categories</a>
+                
+                    <a class="menu-item" href="/tag">Tags</a>
+                
+                    <a class="menu-item" href="/about">About</a>
+                
+            </div>
+        </div>
+    </nav>
+
+</header>
+<script>
+    var mobileBtn = function f() {
+        var toggleMenu = document.getElementsByClassName("menu-toggle")[0];
+        var mobileMenu = document.getElementById("mobile-menu");
+        if(toggleMenu.classList.contains("active")){
+           toggleMenu.classList.remove("active")
+            mobileMenu.classList.remove("active")
+        }else{
+            toggleMenu.classList.add("active")
+            mobileMenu.classList.add("active")
+        }
+    }
+</script>
+        <div class="main">
+            <div class="container">
+    
+    
+        <div class="post-toc">
+    <div class="tocbot-list">
+    </div>
+    <div class="tocbot-list-menu">
+        <a class="tocbot-toc-expand" onclick="expand_toc()">Expand all</a>
+        <a onclick="go_top()">Back to top</a>
+        <a onclick="go_bottom()">Go to bottom</a>
+    </div>
+</div>
+
+<script>
+    document.ready(
+        function () {
+            tocbot.init({
+                tocSelector: '.tocbot-list',
+                contentSelector: '.post-content',
+                headingSelector: 'h1, h2, h3, h4, h5',
+                collapseDepth: 1,
+                orderedList: false,
+                scrollSmooth: true,
+            })
+        }
+    )
+
+    function expand_toc() {
+        var b = document.querySelector(".tocbot-toc-expand");
+        tocbot.init({
+            tocSelector: '.tocbot-list',
+            contentSelector: '.post-content',
+            headingSelector: 'h1, h2, h3, h4, h5',
+            collapseDepth: 6,
+            orderedList: false,
+            scrollSmooth: true,
+        });
+        b.setAttribute("onclick", "collapse_toc()");
+        b.innerHTML = "Collapse all"
+    }
+
+    function collapse_toc() {
+        var b = document.querySelector(".tocbot-toc-expand");
+        tocbot.init({
+            tocSelector: '.tocbot-list',
+            contentSelector: '.post-content',
+            headingSelector: 'h1, h2, h3, h4, h5',
+            collapseDepth: 1,
+            orderedList: false,
+            scrollSmooth: true,
+        });
+        b.setAttribute("onclick", "expand_toc()");
+        b.innerHTML = "Expand all"
+    }
+
+    function go_top() {
+        window.scrollTo(0, 0);
+    }
+
+    function go_bottom() {
+        window.scrollTo(0, document.body.scrollHeight);
+    }
+
+</script>
+    
+
+    
+    <article class="post-wrap">
+        <header class="post-header">
+            <h1 class="post-title">《Linux内核设计与实现》/第4章-进程调度</h1>
+            
+                <div class="post-meta">
+                    
+                        Author: <a itemprop="author" rel="author" href="/">LouisozZ</a>
+                    
+
+                    
+                        <span class="post-time">
+                        Date: <a href="#">August 4, 2019&nbsp;&nbsp;11:10:54</a>
+                        </span>
+                    
+                    
+                        <span class="post-category">
+                    Category:
+                            
+                                <a href="/categories/linux内核/">linux内核</a>
+                            
+                        </span>
+                    
+                </div>
+            
+        </header>
+
+        <div class="post-content">
+            <!-- # 第 4 章 &nbsp;&nbsp; 进程调度 -->
+
+<!-- TOC -->
+<ul>
+<li><a href="#多任务">多任务</a></li>
+<li><a href="#策略">策略</a><ul>
+<li><a href="#进程优先级">进程优先级</a></li>
+<li><a href="#时间片">时间片</a></li>
+</ul>
+</li>
+<li><a href="#linux-调度算法">linux 调度算法</a><ul>
+<li><a href="#调度器类">调度器类</a></li>
+<li><a href="#unix-系统中的调度">UNIX 系统中的调度</a></li>
+<li><a href="#公平调度-cfs">公平调度 CFS</a></li>
+</ul>
+</li>
+<li><a href="#linux调度的实现">linux调度的实现</a><ul>
+<li><a href="#时间记账">时间记账</a></li>
+<li><a href="#进程选择">进程选择</a></li>
+<li><a href="#调度器入口">调度器入口</a></li>
+<li><a href="#睡眠和唤醒">睡眠和唤醒</a></li>
+</ul>
+</li>
+<li><a href="#上下文切换和抢占">上下文切换和抢占</a></li>
+<li><a href="#实时调度策略">实时调度策略</a></li>
+<li><a href="#与调度相关的系统调用">与调度相关的系统调用</a><ul>
+<li><a href="#放弃处理器时间">放弃处理器时间</a></li>
+</ul>
+</li>
+</ul>
+<p>调度程序负责决定将哪个进程投入运行，何时运行以及运行多长时间。调度程序是 linux 这个大操作系统中的一个子系统，他负责在可运行态程序之间分配有限的处理器时间资源。<strong>在一组处于可运行状态的程序中选择一个来执行，是调度程序的基本工作。</strong> </p>
+<h2 id="多任务"><a href="#多任务" class="headerlink" title="多任务"></a>多任务</h2><p>多任务操作系统就是能够同时并发地交互执行多个进程的操作系统。</p>
+<p>多任务操作系统分为两大类：<strong>抢占式多任务</strong> 和 <strong>非抢占式多任务</strong> 。</p>
+<h2 id="策略"><a href="#策略" class="headerlink" title="策略"></a>策略</h2><p>策略决定了什么时候让什么进程执行。</p>
+<p>进程可以大体上被分为：<strong>I/O密集型</strong> 和 <strong>处理器密集型</strong> 。</p>
+<p><strong>I/O密集型</strong> 指的是进程大部分时间都是在提交 I/O 请求或等待 I/O 请求。这样的程序往往只是运行一小会儿时间，更多的时间是在阻塞等待 I/O 。</p>
+<p><strong>处理器密集型</strong> 的大多数时间都在执行代码，除非被抢占，否则他们会一直执行下去。</p>
+<p>一个系统，为了顾及交互的响应速度，也就是对于 I/O 密集型程序的响应速度，会倾向于调度 I/O 密集型的程序，以此来使得交互（键盘、鼠标等 I/O 设备）敏捷。但是同时又要顾及处理器密集型的执行速度，<strong>所以往往是增加 I/O 密集型进程的调度次数，延长处理器密集型进程的执行时间，如此折中。</strong></p>
+<h3 id="进程优先级"><a href="#进程优先级" class="headerlink" title="进程优先级"></a>进程优先级</h3><p>linux 采用了两种不同的优先级范围:</p>
+<ol>
+<li>第一种是 <strong>nice</strong> 值，[-20,+19]，所谓 nice 值，是对其他进程的友好程度，友好程度越高，即 <strong>nice 值越大，那么优先级越低</strong>，别的进程更容易得到 cpu 时间，所以这个进程越 nice。</li>
+<li>第二种是 <strong>实时优先级</strong> ，[0,99]，实时优先级是 <strong>数值越大，优先级越高</strong> ，另外还有就是，<strong>实时进程的优先级都高于一般进程，</strong> 所以这两种优先级是完全不会相互影响的。</li>
+</ol>
+<h3 id="时间片"><a href="#时间片" class="headerlink" title="时间片"></a>时间片</h3><p>时间片是一个数值，表示的是进程在被抢占前能够持续运行多长时间。<strong>调度策略必须定义一个默认的时间片值</strong> 。但是要定义一个合适的时间片值并不容易，如果时间片太长，那么系统对交互的响应表现就会欠佳；但是如果时间片太短，又会造成频繁切换进程从而影响系统的整体性能。</p>
+<p>linux 的 CFS 调度器没有直接将时间片分配到进程，而是将处理器的使用比例划分到进程。这样一来，进程得到的处理器时间其实是和系统负载密切相关的。</p>
+<h2 id="linux-调度算法"><a href="#linux-调度算法" class="headerlink" title="linux 调度算法"></a>linux 调度算法</h2><h3 id="调度器类"><a href="#调度器类" class="headerlink" title="调度器类"></a>调度器类</h3><p>linux 的调度器是以模块的方式提供的，这样做的目的是为了允许不同类型的进程可以针对性的选择调度算法。<strong>这种模块化结构被称为调度器类，它允许多种不同的可动态添加的调度算法并存，调度属于自己范畴的进程。</strong> </p>
+<p>每个调度器都有一个优先级，优先级高的调度器类来执行调度任务，它会选择下一个要被运行的进程。</p>
+<p>完全公平调度（CFS Completely Fair Scheduler）是一个针对普通进程的调度器类，也就是 POSIX 里面的 <strong>SCHED_OTHER</strong> !!!（在linux 里面被称为 SCHED_NORMAL）</p>
+<h3 id="UNIX-系统中的调度"><a href="#UNIX-系统中的调度" class="headerlink" title="UNIX 系统中的调度"></a>UNIX 系统中的调度</h3><p>如前面所说，进程的调度离不开两个概念，进程优先级和时间片。在传统的 UNIX 系统里面，就是通过进程优先级（nice 值）的不同，来分配给进程不同的时间片。但是要是把 nice 值映射到时间片，会导致一些问题：</p>
+<ol>
+<li><strong>进程的切换无法最优进行。</strong> 设 nice 单位值对应 5ms 时间片（nice 值为 20 的最低优先级进程分配到的时间片就是 5ms），那么对于系统中有 nice 值分别为 0（默认） 和 20 的两个进程而言，所分配到的时间片分别是 100ms 和 5ms，那么在 105ms 内才会进行一次进程切换；但是如果是 nice 值都为 20 的两个进程，每 10ms 就要进行一次进程切换。</li>
+<li><strong>相对 nice 值导致的处理器时间比例问题。</strong> nice 值分别为 0 和 1 的两个进程，得到的处理器时间几乎相等；但是 nice 值为 19 和 20，得到的处理器时间，前者是后者的两倍，即使从优先级的角度来说，这两个进程几乎是等优先级。</li>
+<li><strong>有关于 nice 单位值对应的时间片大小。</strong> 要执行 nice 值到时间片的映射，那么就需要有一个 nice 单位值对应的时间片大小，但是这个值应该是要在处理器可测量的范围内，所以这个时间片的值是定时器节拍的整数倍。这样，定时器节拍的改变，就会导致时间片大小的改变。</li>
+<li><strong>基于优先级的调度器为了优化交互任务而唤醒相关进程的问题。</strong> 如果调度器是基于优先级的，那么要是系统中有交互任务，为了提升交互响应速度，会提升新唤醒的任务优先级，这样的话会给一些恶意程序机会，对正常程序的调度产生不好的影响。</li>
+</ol>
+<p>为了解决上述的问题，所有有了重新设计的 CFS，完全公平调度，<strong>他完全摒弃了时间片，而是分配给进程一个处理器使用比重。</strong> </p>
+<h3 id="公平调度-CFS"><a href="#公平调度-CFS" class="headerlink" title="公平调度 CFS"></a>公平调度 CFS</h3><p>CFS 基于一个简单的理念：当前系统中有 n 个可运行的进程，那么每个进程都应该获得 1/n 的处理器时间。</p>
+<p>CFS 的做法是：</p>
+<ol>
+<li>确定一个最小调度周期，也就是<strong>目标延迟</strong>。这个值是一个进程被调度之后距离下一次被调度的间隔时间。这个时间就是上面所提到的 “1/n 处理器时间” 中的处理器时间。</li>
+<li>确定一个进程能够获得处理器时间的<strong>最小粒度</strong>。如果 n 趋于无限大，那么 1/n 的处理器时间就会无限小，首先这是不可能的，即使可能，也会导致频繁的进程调度。所以要确定一个调度的最小粒度。</li>
+<li>根据 nice 值，来加权计算出每个进程所占用的处理器时间比例。</li>
+<li>根据计算得到的处理器时间比例，结合目标延迟，得到每个进程所拥有的”时间片”，然后循环轮转地执行。</li>
+</ol>
+<h2 id="linux调度的实现"><a href="#linux调度的实现" class="headerlink" title="linux调度的实现"></a>linux调度的实现</h2><p>与 CFS 相关的代码存在于 kernel/sched_fair.c 中，下面主要讨论以下四个方面：（1）时间记账；（2）进程选择；（3）调度器入口；（4）睡眠和唤醒。</p>
+<h3 id="时间记账"><a href="#时间记账" class="headerlink" title="时间记账"></a>时间记账</h3><p>所有的调度器都要对进程做时间记账。对于大多数操作系统，会分配一个时间片给进程，作为其在被抢占之前可持续运行的时间，那么这段期间内，当系统的时钟节拍发生一次变化，进程的时间片就要减少一个节拍周期，当其减为零的时候，就是要被别的时间片非零的进程抢占的时候。</p>
+<p>虽然 CFS 没有了时间片的概念，但是他还是要给进程做时间记账，因为要确保每个进程只在公平分配给他的处理器时间内运行。</p>
+<p>在 task_struct 结构体中有一个 sched_entity 类型的结构体变量 se，se 里面有一个 u64 类型的的 vruntime 变量，用来存放进程的虚拟运行时间。所谓虚拟运行时间，就是这个进程已经运行了多久。如果是粒度无限小的系统，这样的系统上有两个优先级相同的进程，那么任意时刻，他们的 vruntime 应该是相同的。</p>
+<p>在 linux 系统中，函数 <code>update_curr()</code> 是由系统定时器周期性的调用，他可以准确的更新 vruntime 所记录的时间。</p>
+<h3 id="进程选择"><a href="#进程选择" class="headerlink" title="进程选择"></a>进程选择</h3><p>上面说到了如果是一个粒度无限小的系统，那么优先级相同的进程任意时刻 vruntime 值都相等，但是真实系统中，处理器时间的最小粒度不可能无限小，所以当任务依次执行的时候，就会出现 vruntime 并不相等的情况。<strong>所以 CFS 在选择下一个调度执行的进程的时候，就会选择具有最小 vruntime 的任务。这也是 CFS 调度算法的核心。</strong></p>
+<p>CFS 使用红黑树来组织可运行进程队列，并利用这个红黑树结构来迅速找到最小 vruntime 进程。</p>
+<ol>
+<li><strong>选择下一个进程。</strong><br>先假设已经构建好了红黑树，红黑树里面保存了系统中所有可运行进程，<strong>节点键值就是 vruntime 值</strong> 。CFS 选择的下一个运行进程就是红黑是的最左叶子节点。实现这一过程的是 __pick_next_entity() 函数，不过该函数并没有从根节点向左遍历，而是会将这棵红黑树的最左节点缓存起来，该函数直接返回最左节点的值。如果当前没有最左节点，也就是得到的是 NULL ，则表示当前红黑树中没有可运行的程序，这个时候就调度 idle 进程执行。</li>
+<li><strong>向红黑树中加入进程</strong><br>enqueue_entity() 函数实现了将进程加入到红黑树中成为一个节点，并且更新最左节点缓存的动作。这个函数是在进程变为可运行态的时候被调用，以及通过 fork() 函数新建了一个进程之后被调用。<br>这个函数首先会更新运行时间和一些统计数据，然后调用 __enqueue_entity() 来完成向红黑树插入的繁琐过程。<strong>比较有趣的是最左节点的更新，有一个标记变量，leftmost，最开始等于 1 ，一旦插入过程中，执行了往右子树遍历的过程，就将该变量置为 0 ，最后，如果 leftmost 为 1 ，则新插入节点就是新的最左节点。</strong> </li>
+<li><strong>从红黑树中删除进程</strong><br>删除动作会发生在<strong>进程阻塞</strong>、<strong>进程终止</strong>的时候。由函数 dequeue_entity() 来完成删除工作。首先还是要更新运行时间和统计数据，然后调用 __dequeue_entity() 来完成从红黑树中的删除节点动作，如果删除的是最左节点，那么就遍历一下红黑树，更新最左节点缓存。</li>
+</ol>
+<h3 id="调度器入口"><a href="#调度器入口" class="headerlink" title="调度器入口"></a>调度器入口</h3><p>进程调度的主要入口点就是函数 <code>schedule()</code> ，该函数会找到一个优先级最高的调度类（每个调度类都有自己的可运行队列），然后由该调度类来给出下一个被调度执行的进程。</p>
+<blockquote>
+<p>所谓不同的调度类，个人理解，对于一般用户程序，都是非实时进程，归属于 CFS 调度；而实时进程，归属于另一个调度类来进行调度。显然，CFS 的优先级应该低于实时调度类。</p>
+</blockquote>
+<p>在 <code>schedule()</code> 函数里面会调用 <code>pick_next_task()</code> 函数，他会按调度器类的优先级排序，依次检测调度器类中是否有可运行进程排队，有则取出运行。</p>
+<p><img src="/picture/picknexttask.jpg" alt="picknesttask"></p>
+<p>从 for 循环的代码可以看出，调度器类按照优先级从高到低，组织成了一个链表，从第一个返回非 NULL 的调度器类中选择下一个可运行进程。</p>
+<p>代码里面做了一个优化，因为我们系统运行的大多数程序都是普通进程，非实时，所以只要判断当前所有可运行进程的总数等于 CFS 排队的可运行进程总数，那就就直接使用 CFS 调度类来选择下一个可运行进程。</p>
+<blockquote>
+<p>schedule() 函数会去调用 __schedule() 函数，后者会调用 context_switch() 函数，切换完上下文之后，程序就会切换到另一个进程的去执行。当下一次这个进程被调度的时候，会从 context_switch() 的下一句开始执行，做了相关工作之后向上返回，就会回到 schedule() 函数调用的位置。即，<strong>从 schedule() 的调用者角度看，调用了 schedule() 函数之后，就切换执行了下一个被调度的进程，当自己重新被调度的时候，会继续从 schedule() 后面开始执行。</strong></p>
+</blockquote>
+<h3 id="睡眠和唤醒"><a href="#睡眠和唤醒" class="headerlink" title="睡眠和唤醒"></a>睡眠和唤醒</h3><p><strong>休眠（被阻塞）的进程是不可被调度的，也就是不可执行状态。</strong> 进程休眠的原因有很多种，但肯定都是为了在等待某一些事件，如等待 I/O，等待硬件事件，等待信号量等。<strong>无论哪种情况，内核的操作都相同：进程把自己标记为休眠，从可执行红黑树中移出，放入到等待队列，然后调用 schedule() 来选择和执行另外的可执行进程。</strong> </p>
+<p><strong>而唤醒的过程就与上面的睡眠过程相反：进程被设置为可执行状态，再从等待队列中移动到可执行红黑树中。</strong> </p>
+<blockquote>
+<p>此前曾讲过，不可执行状态有两种，TASK_INTERRUPTIBLE 和 TASK_UNINTERRUPIBLE ，他们的区别在于是否可以接收信号被提前唤醒，不过他们都是位于同一个等待队列中。</p>
+</blockquote>
+<p><strong>唤醒</strong> </p>
+<p>先来说明一下唤醒的情况。唤醒操作是通过 wake_up() 函数来实现的，wake_up() 函数会将参数对应的等待队列中的所有进程都唤醒（等待队列描述见后面休眠部分），唤醒动作是由 try_to_wake_up() 函数完成，wake_up()这个函数负责 <strong>将等待队列上的所有进程都设置为 TASK_RUNNING 状态</strong>，然后通过函数 enqueue_task() 将他们放到可执行红黑树里面，如果被唤醒进程的优先级比当前执行进程的优先级高，还要设置 need_resched 标志。</p>
+<p><strong>所谓唤醒，就是恢复进程的可执行状态，让他能够再次被调度。</strong></p>
+<p><strong>休眠</strong> </p>
+<p>休眠是通过等待队列来实现的。这里的等待队列就是上面唤醒部分所提到的等待队列。从源码来看，系统已经有声明了一些等待队列，每一个等待队列对应的是一个事件。如源码文件 ds.c 中，就用到了等待队列 ds_wait。当我们在进行内核编程的时候，也可以创建自己的等待队列，可以通过 DECLARE_WAITQUEUE() 静态创建，也可以通过 init_waitqueue_head() 动态创建。</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">//阻塞例程</span></span><br><span class="line"><span class="function"><span class="keyword">static</span> <span class="keyword">int</span> <span class="title">ds_thread</span><span class="params">(<span class="keyword">void</span> *__unused)</span></span></span><br><span class="line"><span class="function"></span>&#123;</span><br><span class="line">	DEFINE_WAIT(wait);</span><br><span class="line"></span><br><span class="line">	<span class="keyword">while</span> (<span class="number">1</span>) &#123;</span><br><span class="line">		prepare_to_wait(&amp;ds_wait, &amp;wait, TASK_INTERRUPTIBLE);</span><br><span class="line">		<span class="keyword">if</span> (list_empty(&amp;ds_work_list))</span><br><span class="line">			schedule();</span><br><span class="line">		finish_wait(&amp;ds_wait, &amp;wait);</span><br><span class="line"></span><br><span class="line">		<span class="keyword">if</span> (kthread_should_stop())</span><br><span class="line">			<span class="keyword">break</span>;</span><br><span class="line"></span><br><span class="line">		process_ds_work();</span><br><span class="line">	&#125;</span><br><span class="line"></span><br><span class="line">	<span class="keyword">return</span> <span class="number">0</span>;</span><br><span class="line">&#125;</span><br><span class="line"><span class="comment">//唤醒例程</span></span><br><span class="line"><span class="function"><span class="keyword">static</span> <span class="keyword">int</span> <span class="title">ds_data</span><span class="params">(struct ds_info *dp, struct ds_msg_tag *pkt, <span class="keyword">int</span> len)</span></span></span><br><span class="line"><span class="function"></span>&#123;</span><br><span class="line">	<span class="class"><span class="keyword">struct</span> <span class="title">ds_data</span> *<span class="title">dpkt</span> = (<span class="title">struct</span> <span class="title">ds_data</span> *) <span class="title">pkt</span>;</span></span><br><span class="line">	<span class="class"><span class="keyword">struct</span> <span class="title">ds_queue_entry</span> *<span class="title">qp</span>;</span></span><br><span class="line"></span><br><span class="line">	qp = kmalloc(<span class="keyword">sizeof</span>(struct ds_queue_entry) + len, GFP_ATOMIC);</span><br><span class="line">	<span class="keyword">if</span> (!qp) &#123;</span><br><span class="line">		__send_ds_nack(dp, dpkt-&gt;handle);</span><br><span class="line">	&#125; <span class="keyword">else</span> &#123;</span><br><span class="line">		qp-&gt;dp = dp;</span><br><span class="line">		<span class="built_in">memcpy</span>(&amp;qp-&gt;req, pkt, len);</span><br><span class="line">		list_add_tail(&amp;qp-&gt;<span class="built_in">list</span>, &amp;ds_work_list);</span><br><span class="line">		wake_up(&amp;ds_wait);</span><br><span class="line">	&#125;</span><br><span class="line">	<span class="keyword">return</span> <span class="number">0</span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>上述代码是我从 linux 源码中随便找的一段例程，不过足以说明等待队列的用法：</p>
+<ol>
+<li><code>DEFINE_WAIT(wait);</code> 创建一个等待队列项；</li>
+<li>这里的例程没有，在别的例程里，还会调用 <code>add_wait_queue(wait_queue_name,&amp;wait);</code> 来把这个等待项加入到名为 wait_queue_name 的等待队列中；</li>
+<li>调用 <code>prepare_to_wait()</code> 来将当前进程状态改变为 TASK_INTERRUPTIBLE 或者 TASK_UNINTERRUPIBLE；</li>
+<li>这里例程没有，如果是 TASK_INTERRUPTIBLE 状态，还应该有检测信号掩码的程序，因为 TASK_INTERRUPTIBLE 状态的进程可能被信号唤醒，如果不是等待的信号，那么就是一次伪唤醒，所以需要检测；</li>
+<li>调用 schedule() 函数，切换进程上下文，当前进程由于状态变为 TASK_INTERRUPTIBLE 或 TASK_UNINTERRUPIBLE 不可被调度，所以一直阻塞。</li>
+</ol>
+<p>上述就是一个进程被阻塞的过程。<strong>当他等待的事件发生了之后，会在事件发生的地方，调用 wake_up() 函数</strong>，然后进入下面的流程：</p>
+<ol>
+<li>某个事件发生之后，唤醒该事件对应的等待队列中的所有进程，将他们的进程状态都改变为 TASK_RUNNING 状态，等待被调度；</li>
+<li>当之前被阻塞的进程重新被调度的时候，就会从上下文被切换的地方开始继续执行，从 schedule() 函数返回，进入到 while 循环的判断中；</li>
+<li>当事件发生之后，一般判断条件会满足，然后就调用 <code>finish_wait()</code> 结束等待，退出循环（这两个的顺序不绝对，根据具体的逻辑来决定）。</li>
+</ol>
+<p>这样，一个被阻塞的程序就又恢复执行了。</p>
+<p><img src="/picture/%E4%BC%91%E7%9C%A0%E5%92%8C%E5%94%A4%E9%86%92.jpg" alt="休眠和唤醒"></p>
+<h2 id="上下文切换和抢占"><a href="#上下文切换和抢占" class="headerlink" title="上下文切换和抢占"></a>上下文切换和抢占</h2><p>在上面说 schedule() 函数的时候已经提到过了，他会调用 context_switch() 来切换上下文，更加具体一点的，context_switch() 函数会完成以下两个工作：</p>
+<ol>
+<li>调用声明在 &lt;asm/mmu_context.h&gt; 中的 switch_mm() 函数，把虚拟内存从上一个进程映射切换到新进程。</li>
+<li>调用声明在 &lt;asm/system.h&gt; 中的 switch_to() 函数，把处理器状态切换到新的处理器状态，包括保存恢复栈、寄存器以及别的与体系结构相关的状态信息。</li>
+</ol>
+<p>那什么时候应该调用 schedule() 函数呢？一个当然是显式的调用该函数来切换进程，如进程阻塞的时候就应该手动的调用 schedule() ，因为已经很明确的知道应该要切换一个可执行的进程来运行。另外就是需要有一个信息来告诉内核，应该执行一次调度，有更合适的进程在等待被调度执行。这个信息就是一个名为 need_resched 的变量。</p>
+<p>在每个进程的 thread_info 结构体中都有一个名为 need_resched 的变量，这个变量的意义就是供内核检查，如果为 1 ，那么就表示当前有更合适的进程在等待被调度执行，需要调用一次 schedule() 来切换进程。</p>
+<p>这个变量也可以实现为一个全局变量，但是因为 current 宏获取 thread_info 结构的速度很快，而且这个结构一般都是在高速缓存中，所以出于速度的考虑，是实现为每个 thread_info 都有一个 need_resched 变量，用以告知内核，是否需要再执行一次调度来切换更合适的进程执行。</p>
+<p>什么时候会将 need_resched 这个变量置位？</p>
+<ol>
+<li>当某个进程被抢占的时候，scheduler_tick() 会设置这个标志；</li>
+<li>当一个高优先级的进程转换为 TASK_RUNNING 状态的时候，try_to_wake_up() 函数会设置这个标志；</li>
+</ol>
+<table>
+<thead>
+<tr>
+<th>函数</th>
+<th>目的</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>set_task_need_resched()</td>
+<td>设置参数进程中的 need_resched 标志</td>
+</tr>
+<tr>
+<td>clear_task_need_resched()</td>
+<td>清除参数进程中的 need_resched 标志</td>
+</tr>
+<tr>
+<td>need_resched()</td>
+<td>检查参数进程中的 need_resched 标志，被设置返回真，否则返回假</td>
+</tr>
+</tbody></table>
+<p><strong>用户抢占</strong> </p>
+<p>内核即将返回到用户空间的时候，回去检测 need_resched 是否被设置，如果已经被设置，那么就会调用 schedule() 函数来选择一个更合适的进程执行，这个时候发生的就是 <strong>用户抢占</strong> 。</p>
+<p>在内核返回到用户空间的时候，去调度一个进程执行是安全的，因为既然可以继续执行先前的程序，那么同样可以重新调度一个新的程序执行。<strong>所以内核无论是从系统调用返回还是从中断处理函数返回到用户空间，都会检测 need_resched 标志，如果这个标识被置位，那么就会调用 schedule() 函数来选择一个更合适的进程执行。</strong> </p>
+<p>简而言之，用户抢占会发生在以下情况：</p>
+<ol>
+<li>从系统调用返回到用户空间；</li>
+<li>从中断处理程序返回到用户空间。</li>
+</ol>
+<p><strong>内核抢占</strong> </p>
+<p>在没有内核抢占的系统里面，内核代码会一直执行完他的逻辑，没有调度点。换句话说，调度程序没有办法在一个内核级程序执行过程中重新调度，内核代码会一直执行，直到其返回到用户空间，或者是有显式的阻塞行为的时候。<strong>在 2.6 之后版本的内核里面，只要调度是安全的，内核就可以在任意时间抢占正在执行的任务。</strong> </p>
+<p>那么什么时候重新调度是安全的呢？答案是：<strong>只要没有持有锁，重新调度就是安全的。</strong> </p>
+<p>为了支持内核抢占，在 thread_info 结构中添加了一个 preempt_count 计数器，初值为 0 ，使用锁，计数器加 1 ，释放锁，计数器减 1 。<strong>当 preempt_count 计数器为 0 ，内核可抢占执行。</strong> </p>
+<p>当中断返回到内核空间的时候，内核会检测 preempt_count 和 need_resched 的值，如果前者为 0 ，后者被设置，说明这个时候有更重要的任务需要被执行，同时又是可以安全抢占的，就可以调用 schedule() 函数执行调度。如果 preempt_count 不为零，那么此时的内核任务持有锁，抢占不安全，继续执行原来的任务。当一个任务的锁被释放完了之后，即，preempt_count 变量因为释放锁的动作被减为 0 了，那么释放锁的代码应该检测 need_resched 是否被设置，如果是，应该重新调度。另外，如果内核任务被阻塞了，会显式调用 schedule() 函数，抢占会显式的发生。</p>
+<p>简而言之，内核抢占发生在以下情况：</p>
+<ol>
+<li>中断处理函数正在执行，且返回内核空间之前；</li>
+<li>内核代码再一次具有可抢占性的时候（这里指的是释放锁之后 preempt_count 值为 0）；</li>
+<li>显式调用 schedule() 重新调度；</li>
+<li>内核任务阻塞。</li>
+</ol>
+<h2 id="实时调度策略"><a href="#实时调度策略" class="headerlink" title="实时调度策略"></a>实时调度策略</h2><p>linux 提供了两种实时调度策略，<strong>SCHED_FIFO</strong> 以及 <strong>SCHED_RR</strong>。就像之前提到过的，对于普通的非实时进程，其调度策略是 SCHED_NORMAL。</p>
+<p>实时策略并不是有 CFS 来管理，而是被一个特殊的实时调度器管理。</p>
+<blockquote>
+<p>印证了之前我的猜测，确实，调度器类，就是按照这种方式来区分，目前知道的两种调度器类，一种是普通进程的 CFS ，一种是优先级更好的实时调度器类。</p>
+</blockquote>
+<p><strong>SCHED_FIFO</strong> 实现的是一种简单的先来先运行的调度策略。采用 SCHED_FIFO 方式调度的进程，优先级相同的情况下，哪个进程先成为可执行态，哪个进程就会获得处理器资源，并且直到其阻塞、运行结束才会主动释放处理器资源，否则的话，只有被更高优先级实时任务（不论采用的是 SCHED_FIFO 还是 SCHED_RR 调度方式）所抢占才会让出处理器资源。 <strong>只要有使用 SCHED_FIFO 方式调度的进程在执行，那些比他优先级低的进程只有等到这个进程变成不可执行态才有机会被调度。</strong> </p>
+<p><strong>SCHED_RR</strong> 与 SCHED_FIFO 大体相同，不过就是他们是有分配时间片的，是一种实时轮流调度算法。不过这种轮流仅限于同等优先级的 SCHED_RR 进程之间，高优先级的进程会抢占，低优先的任务需等待，即使 SCHED_RR 的任务时间片耗尽也要等待他变成不可执行态。</p>
+<p><strong>上述两种实时调度算法都是静态优先级，内核不为实施进程计算动态优先级，这样是为了保证新创建的高优先级任务一定能够抢占之前的低优先级任务。</strong> </p>
+<h2 id="与调度相关的系统调用"><a href="#与调度相关的系统调用" class="headerlink" title="与调度相关的系统调用"></a>与调度相关的系统调用</h2><table>
+<thead>
+<tr>
+<th>系统调用</th>
+<th>描述</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>nice()</td>
+<td>设置进程的 nice 值</td>
+</tr>
+<tr>
+<td>sched_setscheduler()</td>
+<td>设置进程的调度策略</td>
+</tr>
+<tr>
+<td>sched_getscheduler()</td>
+<td>获取进程的调度策略</td>
+</tr>
+<tr>
+<td>sched_setparam()</td>
+<td>设置进程实时优先级</td>
+</tr>
+<tr>
+<td>sched_getparam()</td>
+<td>获取进程实时优先级</td>
+</tr>
+<tr>
+<td>sched_get_priority_max()</td>
+<td>获取实时优先级最大值</td>
+</tr>
+<tr>
+<td>sched_get_priority_min()</td>
+<td>获取实时优先级最小值</td>
+</tr>
+<tr>
+<td>sched_rr_get_interval()</td>
+<td>获取进程的时间片值</td>
+</tr>
+<tr>
+<td>sched_setaffinity()</td>
+<td>设置进程的处理器亲和力</td>
+</tr>
+<tr>
+<td>sched_getaffinity()</td>
+<td>获取进程的处理器亲和力</td>
+</tr>
+<tr>
+<td>sched_yield()</td>
+<td>暂时让出处理器</td>
+</tr>
+</tbody></table>
+<h3 id="放弃处理器时间"><a href="#放弃处理器时间" class="headerlink" title="放弃处理器时间"></a>放弃处理器时间</h3><p>linux 通过系统调用 sched_yield()，提供了一种让进程显式让出处理器时间给其他等待被执行进程的机制。<strong>它是通过将该进程从活动队列移动到过期队列中实现的。</strong>由此产生的效果不仅是别的进程抢占了该进程的执行，将他放置到了该优先级队列的末尾，同时还把它放到了过期队列中，这样在一段时间内，这个进程是没有办法被调度的。</p>
+
+        </div>
+
+        
+            <section class="post-copyright">
+                
+                    <p class="copyright-item">
+                        <span>Author:</span>
+                        <span>LouisozZ</span>
+                    </p>
+                
+                
+                    <p class="copyright-item">
+                        <span>Permalink:</span>
+                        <span><a href="http://louisozz.github.io/post/2019/linux内核设计与实现/第4章-进程调度/">http://louisozz.github.io/post/2019/linux内核设计与实现/第4章-进程调度/</a></span>
+                    </p>
+                
+                
+                    <p class="copyright-item">
+                        <span>License:</span>
+                        <span>Copyright (c) 2019 <a href="http://creativecommons.org/licenses/by-nc/4.0/">CC-BY-NC-4.0</a> LICENSE</span>
+                    </p>
+                
+                
+                     <p class="copyright-item">
+                         <span>Slogan:</span>
+                         <span>Do you believe in <strong>DESTINY<strong>?</strong></strong></span>
+                     </p>
+                
+
+            </section>
+        
+        <section class="post-tags">
+            <div>
+                <span>Tag(s):</span>
+                <span class="tag">
+                    
+                    
+                        <a href="/tags/linux/"># linux</a>
+                    
+                        
+                </span>
+            </div>
+            <div>
+                <a href="javascript:window.history.back();">back</a>
+                <span>· </span>
+                <a href="/">home</a>
+            </div>
+        </section>
+        <section class="post-nav">
+            
+                <a class="prev" rel="prev" href="/post/2019/linux内核设计与实现/第5章-系统调用/">《Linux内核设计与实现》/第5章-系统调用</a>
+            
+            
+            <a class="next" rel="next" href="/post/2019/linux内核设计与实现/第3章-进程管理/">《Linux内核设计与实现》/第3章-进程管理</a>
+            
+        </section>
+
+
+    </article>
+</div>
+
+        </div>
+        <footer id="footer" class="footer">
+    <div class="copyright">
+        <span>© LouisozZ | Powered by <a href="https://hexo.io" target="_blank">Hexo</a> & <a href="https://github.com/Siricee/hexo-theme-Chic" target="_blank">Chic</a></span>
+    </div>
+</footer>
+
+    </div>
+</body>
+</html>

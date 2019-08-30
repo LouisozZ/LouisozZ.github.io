@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="en">
+<head><meta name="generator" content="Hexo 3.9.0">
+    <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, user-scalable=no, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0">
+<meta http-equiv="X-UA-Compatible" content="ie=edge">
+
+
+
+<title>《Linux内核设计与实现》/第1章-Linux内核简介 | LouisozZ的博客</title>
+
+
+
+    <link rel="icon" href="/head.png">
+
+
+
+
+    <!-- stylesheets list from _config.yml -->
+    
+    <link rel="stylesheet" href="/css/style.css">
+    
+
+
+
+    <!-- scripts list from _config.yml -->
+    
+    <script src="/js/script.js"></script>
+    
+    <script src="/js/tocbot.min.js"></script>
+    
+
+
+
+    
+    
+        
+    
+
+
+</head>
+<body>
+    <div class="wrapper">
+        <header>
+    <nav class="navbar">
+        <div class="container">
+            <div class="navbar-header header-logo"><a href="/">LouisozZ 的博客</a></div>
+            <div class="menu navbar-right">
+                
+                    <a class="menu-item" href="/archives">Posts</a>
+                
+                    <a class="menu-item" href="/category">Categories</a>
+                
+                    <a class="menu-item" href="/tag">Tags</a>
+                
+                    <a class="menu-item" href="/about">About</a>
+                
+                <input id="switch_default" type="checkbox" class="switch_default">
+                <label for="switch_default" class="toggleBtn"></label>
+            </div>
+
+        </div>
+    </nav>
+
+    
+    <nav class="navbar-mobile" id="nav-mobile">
+        <div class="container">
+            <div class="navbar-header">
+                <div>
+                    <a href="/">LouisozZ 的博客</a><a id="mobile-toggle-theme">·&nbsp;Light</a>
+                </div>
+                <div class="menu-toggle" onclick="mobileBtn()">&#9776; Menu</div>
+            </div>
+            <div class="menu" id="mobile-menu">
+                
+                    <a class="menu-item" href="/archives">Posts</a>
+                
+                    <a class="menu-item" href="/category">Categories</a>
+                
+                    <a class="menu-item" href="/tag">Tags</a>
+                
+                    <a class="menu-item" href="/about">About</a>
+                
+            </div>
+        </div>
+    </nav>
+
+</header>
+<script>
+    var mobileBtn = function f() {
+        var toggleMenu = document.getElementsByClassName("menu-toggle")[0];
+        var mobileMenu = document.getElementById("mobile-menu");
+        if(toggleMenu.classList.contains("active")){
+           toggleMenu.classList.remove("active")
+            mobileMenu.classList.remove("active")
+        }else{
+            toggleMenu.classList.add("active")
+            mobileMenu.classList.add("active")
+        }
+    }
+</script>
+        <div class="main">
+            <div class="container">
+    
+    
+        <div class="post-toc">
+    <div class="tocbot-list">
+    </div>
+    <div class="tocbot-list-menu">
+        <a class="tocbot-toc-expand" onclick="expand_toc()">Expand all</a>
+        <a onclick="go_top()">Back to top</a>
+        <a onclick="go_bottom()">Go to bottom</a>
+    </div>
+</div>
+
+<script>
+    document.ready(
+        function () {
+            tocbot.init({
+                tocSelector: '.tocbot-list',
+                contentSelector: '.post-content',
+                headingSelector: 'h1, h2, h3, h4, h5',
+                collapseDepth: 1,
+                orderedList: false,
+                scrollSmooth: true,
+            })
+        }
+    )
+
+    function expand_toc() {
+        var b = document.querySelector(".tocbot-toc-expand");
+        tocbot.init({
+            tocSelector: '.tocbot-list',
+            contentSelector: '.post-content',
+            headingSelector: 'h1, h2, h3, h4, h5',
+            collapseDepth: 6,
+            orderedList: false,
+            scrollSmooth: true,
+        });
+        b.setAttribute("onclick", "collapse_toc()");
+        b.innerHTML = "Collapse all"
+    }
+
+    function collapse_toc() {
+        var b = document.querySelector(".tocbot-toc-expand");
+        tocbot.init({
+            tocSelector: '.tocbot-list',
+            contentSelector: '.post-content',
+            headingSelector: 'h1, h2, h3, h4, h5',
+            collapseDepth: 1,
+            orderedList: false,
+            scrollSmooth: true,
+        });
+        b.setAttribute("onclick", "expand_toc()");
+        b.innerHTML = "Expand all"
+    }
+
+    function go_top() {
+        window.scrollTo(0, 0);
+    }
+
+    function go_bottom() {
+        window.scrollTo(0, document.body.scrollHeight);
+    }
+
+</script>
+    
+
+    
+    <article class="post-wrap">
+        <header class="post-header">
+            <h1 class="post-title">《Linux内核设计与实现》/第1章-Linux内核简介</h1>
+            
+                <div class="post-meta">
+                    
+                        Author: <a itemprop="author" rel="author" href="/">LouisozZ</a>
+                    
+
+                    
+                        <span class="post-time">
+                        Date: <a href="#">August 1, 2019&nbsp;&nbsp;11:10:54</a>
+                        </span>
+                    
+                    
+                        <span class="post-category">
+                    Category:
+                            
+                                <a href="/categories/linux内核/">linux内核</a>
+                            
+                        </span>
+                    
+                </div>
+            
+        </header>
+
+        <div class="post-content">
+            <!-- # 第 1 章 &nbsp;&nbsp; linux内核简介 -->
+
+<!-- TOC -->
+<ul>
+<li><a href="#操作系统和内核简介">操作系统和内核简介</a></li>
+</ul>
+<h2 id="操作系统和内核简介"><a href="#操作系统和内核简介" class="headerlink" title="操作系统和内核简介"></a>操作系统和内核简介</h2><p>通常，内核是由：负责响应中断的<strong>中断服务程序</strong> ，负责管理多个进程从而共享处理器时间的 <strong>调度程序</strong> ，负责管理进程地址空间的 <strong>内存管理程序</strong> ，以及 <strong>网络</strong> 、<strong>进程间通信</strong> 等系统服务程序共同组成。</p>
+<p>内核独立于应用程序，拥有受保护的地址空间，拥有访问硬件资源的所有权限。</p>
+<p>在一个操作系统上运行的应用程序，通过 <strong>系统调用</strong> 来与内核进行通信，让系统来代替他完成各种不同的任务。当一个应用程序调用系统调用的时候，这个时候<strong>这个应用程序是通过该系统调用运行于内核态</strong>，与此同时，<strong>内核也是运行于这个进程的上下文中</strong>。</p>
+<p>内核还要管理计算机上的硬件。当硬件想与系统进行通信的时候，首先需要发送一个<strong>异步中断信号</strong>来打断处理器的执行（此时运行着操作系统内核），内核接收到这个异步中断，通过这个中断号查找对应的<strong>中断服务程序</strong>，调用这个中断服务程序来响应和处理中断。</p>
+<blockquote>
+<p>许多操作系统，包括linux，他们的中断服务程序都不在进程上下文中执行，他们在一个与所有进程都无关的，专门的中断上下文中去执行。<strong>之所以存在这样一个专门的环境来执行中断服务程序，就是为了能够快速响应中断，并处理中断请求，然后快速退出。</strong> </p>
+</blockquote>
+<p>一个处理器，在任何时间点下，只可能在以下三种状态中：</p>
+<ol>
+<li>运行于用户态，执行用户应用程序；</li>
+<li>运行于内核态，处于进程上下文，代表某个特定的进程执行；</li>
+<li>运行于内核态，处于中断上下文，与任何进程无关，处理某个特定的中断。</li>
+</ol>
+<blockquote>
+<p>当 CPU 空闲的时候，运行一个空程序，运行于内核态，处于进程上下文。</p>
+</blockquote>
+<p>unix 内核通常需要硬件系统提供 <strong>页机制</strong> 来管理内存，也就是 MMU (Memory Management Unit)。</p>
+<p>linux 内核汲取了微内核的精华，具有如下特点：模块和设计、抢占式内核、支持内核线程、动态装在内核模块。<strong>linux 是模块化的，多线程，以及内核本身可调度的操作系统。</strong> </p>
+
+        </div>
+
+        
+            <section class="post-copyright">
+                
+                    <p class="copyright-item">
+                        <span>Author:</span>
+                        <span>LouisozZ</span>
+                    </p>
+                
+                
+                    <p class="copyright-item">
+                        <span>Permalink:</span>
+                        <span><a href="http://louisozz.github.io/post/2019/linux内核设计与实现/第1章-linux内核简介/">http://louisozz.github.io/post/2019/linux内核设计与实现/第1章-linux内核简介/</a></span>
+                    </p>
+                
+                
+                    <p class="copyright-item">
+                        <span>License:</span>
+                        <span>Copyright (c) 2019 <a href="http://creativecommons.org/licenses/by-nc/4.0/">CC-BY-NC-4.0</a> LICENSE</span>
+                    </p>
+                
+                
+                     <p class="copyright-item">
+                         <span>Slogan:</span>
+                         <span>Do you believe in <strong>DESTINY<strong>?</strong></strong></span>
+                     </p>
+                
+
+            </section>
+        
+        <section class="post-tags">
+            <div>
+                <span>Tag(s):</span>
+                <span class="tag">
+                    
+                    
+                        <a href="/tags/linux/"># linux</a>
+                    
+                        
+                </span>
+            </div>
+            <div>
+                <a href="javascript:window.history.back();">back</a>
+                <span>· </span>
+                <a href="/">home</a>
+            </div>
+        </section>
+        <section class="post-nav">
+            
+                <a class="prev" rel="prev" href="/post/2019/linux内核设计与实现/第2章-从内核出发/">《Linux内核设计与实现》/第2章-从内核出发</a>
+            
+            
+        </section>
+
+
+    </article>
+</div>
+
+        </div>
+        <footer id="footer" class="footer">
+    <div class="copyright">
+        <span>© LouisozZ | Powered by <a href="https://hexo.io" target="_blank">Hexo</a> & <a href="https://github.com/Siricee/hexo-theme-Chic" target="_blank">Chic</a></span>
+    </div>
+</footer>
+
+    </div>
+</body>
+</html>

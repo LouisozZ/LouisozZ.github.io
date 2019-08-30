@@ -1,0 +1,419 @@
+<!DOCTYPE html>
+<html lang="en">
+<head><meta name="generator" content="Hexo 3.9.0">
+    <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, user-scalable=no, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0">
+<meta http-equiv="X-UA-Compatible" content="ie=edge">
+
+
+
+<title>《Linux内核设计与实现》/第7章-中断和中断处理 | LouisozZ的博客</title>
+
+
+
+    <link rel="icon" href="/head.png">
+
+
+
+
+    <!-- stylesheets list from _config.yml -->
+    
+    <link rel="stylesheet" href="/css/style.css">
+    
+
+
+
+    <!-- scripts list from _config.yml -->
+    
+    <script src="/js/script.js"></script>
+    
+    <script src="/js/tocbot.min.js"></script>
+    
+
+
+
+    
+    
+        
+    
+
+
+</head>
+<body>
+    <div class="wrapper">
+        <header>
+    <nav class="navbar">
+        <div class="container">
+            <div class="navbar-header header-logo"><a href="/">LouisozZ 的博客</a></div>
+            <div class="menu navbar-right">
+                
+                    <a class="menu-item" href="/archives">Posts</a>
+                
+                    <a class="menu-item" href="/category">Categories</a>
+                
+                    <a class="menu-item" href="/tag">Tags</a>
+                
+                    <a class="menu-item" href="/about">About</a>
+                
+                <input id="switch_default" type="checkbox" class="switch_default">
+                <label for="switch_default" class="toggleBtn"></label>
+            </div>
+
+        </div>
+    </nav>
+
+    
+    <nav class="navbar-mobile" id="nav-mobile">
+        <div class="container">
+            <div class="navbar-header">
+                <div>
+                    <a href="/">LouisozZ 的博客</a><a id="mobile-toggle-theme">·&nbsp;Light</a>
+                </div>
+                <div class="menu-toggle" onclick="mobileBtn()">&#9776; Menu</div>
+            </div>
+            <div class="menu" id="mobile-menu">
+                
+                    <a class="menu-item" href="/archives">Posts</a>
+                
+                    <a class="menu-item" href="/category">Categories</a>
+                
+                    <a class="menu-item" href="/tag">Tags</a>
+                
+                    <a class="menu-item" href="/about">About</a>
+                
+            </div>
+        </div>
+    </nav>
+
+</header>
+<script>
+    var mobileBtn = function f() {
+        var toggleMenu = document.getElementsByClassName("menu-toggle")[0];
+        var mobileMenu = document.getElementById("mobile-menu");
+        if(toggleMenu.classList.contains("active")){
+           toggleMenu.classList.remove("active")
+            mobileMenu.classList.remove("active")
+        }else{
+            toggleMenu.classList.add("active")
+            mobileMenu.classList.add("active")
+        }
+    }
+</script>
+        <div class="main">
+            <div class="container">
+    
+    
+        <div class="post-toc">
+    <div class="tocbot-list">
+    </div>
+    <div class="tocbot-list-menu">
+        <a class="tocbot-toc-expand" onclick="expand_toc()">Expand all</a>
+        <a onclick="go_top()">Back to top</a>
+        <a onclick="go_bottom()">Go to bottom</a>
+    </div>
+</div>
+
+<script>
+    document.ready(
+        function () {
+            tocbot.init({
+                tocSelector: '.tocbot-list',
+                contentSelector: '.post-content',
+                headingSelector: 'h1, h2, h3, h4, h5',
+                collapseDepth: 1,
+                orderedList: false,
+                scrollSmooth: true,
+            })
+        }
+    )
+
+    function expand_toc() {
+        var b = document.querySelector(".tocbot-toc-expand");
+        tocbot.init({
+            tocSelector: '.tocbot-list',
+            contentSelector: '.post-content',
+            headingSelector: 'h1, h2, h3, h4, h5',
+            collapseDepth: 6,
+            orderedList: false,
+            scrollSmooth: true,
+        });
+        b.setAttribute("onclick", "collapse_toc()");
+        b.innerHTML = "Collapse all"
+    }
+
+    function collapse_toc() {
+        var b = document.querySelector(".tocbot-toc-expand");
+        tocbot.init({
+            tocSelector: '.tocbot-list',
+            contentSelector: '.post-content',
+            headingSelector: 'h1, h2, h3, h4, h5',
+            collapseDepth: 1,
+            orderedList: false,
+            scrollSmooth: true,
+        });
+        b.setAttribute("onclick", "expand_toc()");
+        b.innerHTML = "Expand all"
+    }
+
+    function go_top() {
+        window.scrollTo(0, 0);
+    }
+
+    function go_bottom() {
+        window.scrollTo(0, document.body.scrollHeight);
+    }
+
+</script>
+    
+
+    
+    <article class="post-wrap">
+        <header class="post-header">
+            <h1 class="post-title">《Linux内核设计与实现》/第7章-中断和中断处理</h1>
+            
+                <div class="post-meta">
+                    
+                        Author: <a itemprop="author" rel="author" href="/">LouisozZ</a>
+                    
+
+                    
+                        <span class="post-time">
+                        Date: <a href="#">August 7, 2019&nbsp;&nbsp;11:10:54</a>
+                        </span>
+                    
+                    
+                        <span class="post-category">
+                    Category:
+                            
+                                <a href="/categories/linux内核/">linux内核</a>
+                            
+                        </span>
+                    
+                </div>
+            
+        </header>
+
+        <div class="post-content">
+            <!-- # 第 7 章 &nbsp;&nbsp; 中断和中断处理 -->
+
+<!-- TOC -->
+<ul>
+<li><a href="#中断">中断</a></li>
+<li><a href="#中断处理程序">中断处理程序</a></li>
+<li><a href="#上半部与下半部">上半部与下半部</a></li>
+<li><a href="#注册和卸载中断处理函数">注册和卸载中断处理函数</a><ul>
+<li><a href="#注册中断处理程序">注册中断处理程序</a></li>
+<li><a href="#卸载中断处理程序">卸载中断处理程序</a></li>
+</ul>
+</li>
+<li><a href="#编写中断处理程序">编写中断处理程序</a></li>
+<li><a href="#中断上下文">中断上下文</a></li>
+<li><a href="#中断处理机制的实现">中断处理机制的实现</a></li>
+<li><a href="#procinterrupts">/proc/interrupts</a></li>
+<li><a href="#中断控制">中断控制</a><ul>
+<li><a href="#禁止和激活中断">禁止和激活中断</a></li>
+<li><a href="#禁止指定中断线">禁止指定中断线</a></li>
+<li><a href="#中断系统的状态">中断系统的状态</a></li>
+</ul>
+</li>
+</ul>
+<h2 id="中断"><a href="#中断" class="headerlink" title="中断"></a>中断</h2><p><strong>中断的本质上是一种特殊的电信号，由硬件发送给处理器。这种发送的过程就是对应引脚的电平变化。</strong> 处理器检测到这个信号之后，就中断自己当前的工作转而处理中断。这里的处理中断就是操作系统提供的一段代码，从操作系统的角度来看，是从处理器获取中断到来的信息；从处理器的角度来看，就是通过这段处理中断的代码来告知操作系统，有中断到来了。此后就是操作系统来处理中断了。</p>
+<p>不同设备对应的中断不相同，每一个中断都通过一个唯一的数字来标识，这样操作系统就能区分到底是产生了什么中断。<strong>这种唯一的数字，也被称为中断请求线，不过我还是习惯称其为中断请求号，IRQn。</strong> 比如在经典 PC 上，IRQ0 是时钟中断，IRQ1 是键盘中断。不过在 PCI 总线上的设备，中断号是动态分配的。<strong>不过只要记住，一个中断对应一个唯一的中断号。</strong> </p>
+<p><strong>中断的产生是异步的，硬件在产生中断的时候，是不会考虑处理器的时钟周期的，随意中断可能在任意时刻产生。而异常则是同步由处理器产生。</strong></p>
+<h2 id="中断处理程序"><a href="#中断处理程序" class="headerlink" title="中断处理程序"></a>中断处理程序</h2><p>上面说过，硬件通过电信号中断了处理器的执行之后，处理器得知有硬件产生了中断，会把这个中断消息告知操作系统，然后由操作系统接手这个中断的处理。<strong>为了响应收到的中断，内核会执行与该中断对应的函数，这个函数就被叫做中断处理函数，或者是中断服务例程（ISR Interrupt Service Routine)。</strong> </p>
+<p>一个设备会产生多少个中断，就有多少个中断处理函数与这个设备对应。<strong>一个设备的中断处理函数是这个设备的驱动程序的一部分，设备的驱动程序是用于对设备进行管理的内核代码。</strong></p>
+<p>在 linux 里面，中断处理函数就是普通的 C 函数，只不过要按照特定的类型声明，以便内核可以按照标准的方式传递处理程序的信息，其他方面都和一般函数没有区别。<strong>中断处理程序与一般函数的最本质区别在于，中断处理程序被内核调用，用以响应中断，并且运行在中断上下文中，在中断上下文中执行的代码不能被阻塞。</strong> </p>
+<h2 id="上半部与下半部"><a href="#上半部与下半部" class="headerlink" title="上半部与下半部"></a>上半部与下半部</h2><p>中断可能随时发生，所以中断处理程序可能随时被执行。为了能够尽快恢复被中断代码的执行，中断处理程序应该快速的执行，或者说，中断处理程序应该执行轻量的任务，然后快速退出。<strong>从后面的中断处理流程中可以看到，当收到一个中断之后，处理器会停止正在做的事情，跳转到特定位置开始执行中断处理函数，并且关闭中断系统。这里的关闭中断系统，如果被调用的中断处理程序设置了 IRQF_DISABLED，那么会关闭所有的中断线，即处理器在中断函数执行期间，不接受任何新的中断；而如果没有设置 IRQF_DISABLED，那么会屏蔽掉当前中断线。</strong> 所以这也要求中断处理分出上下部。</p>
+<p>如果考虑一下类似网卡这样的设备产生的中断，有大量的数据是需要拷贝和处理，如果把所有操作都放到中断处理程序中，那么这个中断处理程序显然不是轻量的，所以 <strong>为了能够让中断处理程序运行的又快，完成的工作量又多，就把中断的处理切分成了两个部分，上半部和下半部。</strong> </p>
+<p><strong>中断处理程序的上半部：</strong> 接收中断之后立即开始执行，但是只做有严格时限的工作，例如对接收到的中断进行答复，或者复位硬件。这些工作都是在所有中断被禁止的情况下完成的。</p>
+<p><strong>中断处理程序的下半部：</strong> 这部分完成那些允许被延后执行的工作。在之后的合适时机，下半部会被开中断执行。具体内容见 <a href="./第8章-下半部和推后执行的工作.md">第八章</a>。</p>
+<h2 id="注册和卸载中断处理函数"><a href="#注册和卸载中断处理函数" class="headerlink" title="注册和卸载中断处理函数"></a>注册和卸载中断处理函数</h2><p>如果一个设备要使用中断，那么其驱动程序中就应该有注册中断处理程序的代码。</p>
+<h3 id="注册中断处理程序"><a href="#注册中断处理程序" class="headerlink" title="注册中断处理程序"></a>注册中断处理程序</h3><p>驱动程序可以通过 request_irq() 函数注册一个中断处理程序，并且激活指定的中断号，用于之后处理对应的中断。</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">int</span> <span class="title">request_irq</span><span class="params">(<span class="keyword">unsigned</span> <span class="keyword">int</span> irq,</span></span></span><br><span class="line"><span class="function"><span class="params">                <span class="keyword">irq_handler_t</span> handler,</span></span></span><br><span class="line"><span class="function"><span class="params">                <span class="keyword">unsigned</span> <span class="keyword">long</span> flags,</span></span></span><br><span class="line"><span class="function"><span class="params">                <span class="keyword">const</span> <span class="keyword">char</span>* name,</span></span></span><br><span class="line"><span class="function"><span class="params">                <span class="keyword">void</span>* dev)</span></span></span><br></pre></td></tr></table></figure>
+
+<ol>
+<li><p><strong>unsigned int irq</strong> ：<br>irq 表示要分配的中断号。对于传统的 PC 设备，如键盘，鼠标等，是可以预先确定，不过对别大多数别的设备而言，可以通过探测获取，或者是通过编程动态获取。（<em>怎么探测，怎么动态获取我还不知道。</em>）</p>
+</li>
+<li><p><strong>irq_handler_t handler</strong> ：<br>handler 是一个函数指针，指向处理这个中断的中断处理函数，只要操作系统一接收到这个中断，handler 所代表的实参这个函数就会被内核调用。<br><code>typedef irqreturn_t (*irq_handler_t)(int,void*);</code></p>
+</li>
+<li><p><strong>unsigned long flags</strong> ：<br>flag 可以为 0 ，也可以是下面的一个或者多个标志的位掩码，标志中比较重要的有：</p>
+<ul>
+<li><strong>IRQF_DISABLED</strong>：如果该标志被设置，表示内核在处理中断处理程序的时候，所有别的中断都将被禁用。如果不设置，该中断线可以与其他中断线同时运行。</li>
+<li><strong>IRQF_SAMPLE_RANDOM</strong>：如果有中断设置了这个标志，那么中断的间隔时间就会被添加进内核熵池，此后可以作为硬件随机值被提供。</li>
+<li><strong>IRQF_TIMER</strong> ：该标志是为系统定时器专门准备的。</li>
+<li><strong>IRQF_SHARED</strong> ：表明这个中断号以及中断处理程序会被多个设备共享，区分对应于同一个中断号的不同设备，是通过 request_irq() 的最后一个参数。要是注册中断处理程序的两个不同设备使用了同一个中断号，但是没有使用 IRQF_SHARED 标志，那么后注册的注册函数会注册失败，返回 -EBUSY。</li>
+</ul>
+</li>
+<li><p><strong>const char* name</strong> ：<br>与中断相关的设备的 ASCII 文本表示，这个值会被 /proc/irq 和 /proc/interrupts 文件所使用。</p>
+</li>
+<li><p><strong>void* dev</strong> ：<br>如果这个参数有唯一确定性，那么就可以作为一个 cookie ，用来区分共享了中断号的不同中断处理程序、或是共享了中断处理程序的不同设备。另外，dev 也可能指向中断处理程序使用的一个数据结构，因为对每个设备而言，设备结构都是唯一的，而且可能在中断处理程序中会使用到这个结构。并且，如果要卸载一个中断处理程序的时候，这个 dev 也能提供一个唯一标识信息。</p>
+</li>
+</ol>
+<p>request_irq() 成功执行则返回 0 ，否则返回非 0，指定的中断处理程序就不会被注册。</p>
+<p><strong>注意！request_irq() 函数可能会休眠，所以不能在中断上下文或者其他不允许阻塞的代码中调用该函数。</strong> request_irq() 会休眠的原因是因为他会在 /proc/irq 文件中创建一个对应项，所以层层调用下，会调用到 kmalloc() 函数，而这个函数是可以休眠的。</p>
+<p>另外还有一点需要注意的是，要在设备初始化之后再注册中断函数，避免设备未初始化完成就在执行中断处理函数。</p>
+<h3 id="卸载中断处理程序"><a href="#卸载中断处理程序" class="headerlink" title="卸载中断处理程序"></a>卸载中断处理程序</h3><figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">void</span> <span class="title">free_irq</span><span class="params">(<span class="keyword">unsigned</span> <span class="keyword">int</span> irq,<span class="keyword">void</span> *dev)</span></span>;</span><br></pre></td></tr></table></figure>
+
+<ol>
+<li>如果指定的中断号不是共享的，那么卸载了这个中断处理函数的同时会禁用该中断号。</li>
+<li>如果指定的中断号是共享的，那么仅会删除与 dev 对应的中断处理函数。当然，如果这是删除的最后一个中断处理函数，那么也会禁用该中断号。</li>
+</ol>
+<p>内核是如何实现共享的？</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br><span class="line">66</span><br><span class="line">67</span><br><span class="line">68</span><br><span class="line">69</span><br><span class="line">70</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">const</span> <span class="keyword">void</span> *<span class="title">free_irq</span><span class="params">(<span class="keyword">unsigned</span> <span class="keyword">int</span> irq, <span class="keyword">void</span> *dev_id)</span></span></span><br><span class="line"><span class="function"></span>&#123;</span><br><span class="line">	<span class="class"><span class="keyword">struct</span> <span class="title">irq_desc</span> *<span class="title">desc</span> = <span class="title">irq_to_desc</span>(<span class="title">irq</span>);</span></span><br><span class="line">	<span class="class"><span class="keyword">struct</span> <span class="title">irqaction</span> *<span class="title">action</span>;</span></span><br><span class="line">	<span class="keyword">const</span> <span class="keyword">char</span> *devname;</span><br><span class="line"></span><br><span class="line">	<span class="keyword">if</span> (!desc || WARN_ON(irq_settings_is_per_cpu_devid(desc)))</span><br><span class="line">		<span class="keyword">return</span> <span class="literal">NULL</span>;</span><br><span class="line"></span><br><span class="line"><span class="meta">#<span class="meta-keyword">ifdef</span> CONFIG_SMP</span></span><br><span class="line">	<span class="keyword">if</span> (WARN_ON(desc-&gt;affinity_notify))</span><br><span class="line">		desc-&gt;affinity_notify = <span class="literal">NULL</span>;</span><br><span class="line"><span class="meta">#<span class="meta-keyword">endif</span></span></span><br><span class="line"></span><br><span class="line">	action = __free_irq(desc, dev_id);</span><br><span class="line"></span><br><span class="line">	<span class="keyword">if</span> (!action)</span><br><span class="line">		<span class="keyword">return</span> <span class="literal">NULL</span>;</span><br><span class="line"></span><br><span class="line">	devname = action-&gt;name;</span><br><span class="line">	kfree(action);</span><br><span class="line">	<span class="keyword">return</span> devname;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="keyword">static</span> <span class="class"><span class="keyword">struct</span> <span class="title">irqaction</span> *__<span class="title">free_irq</span>(<span class="title">struct</span> <span class="title">irq_desc</span> *<span class="title">desc</span>, <span class="title">void</span> *<span class="title">dev_id</span>)</span></span><br><span class="line"><span class="class">&#123;</span></span><br><span class="line">	<span class="keyword">unsigned</span> irq = desc-&gt;irq_data.irq;</span><br><span class="line">	<span class="class"><span class="keyword">struct</span> <span class="title">irqaction</span> *<span class="title">action</span>, **<span class="title">action_ptr</span>;</span></span><br><span class="line">	<span class="keyword">unsigned</span> <span class="keyword">long</span> flags;</span><br><span class="line"></span><br><span class="line">	WARN(in_interrupt(), <span class="string">"Trying to free IRQ %d from IRQ context!\n"</span>, irq);</span><br><span class="line"></span><br><span class="line">	mutex_lock(&amp;desc-&gt;request_mutex);</span><br><span class="line">	chip_bus_lock(desc);</span><br><span class="line">	raw_spin_lock_irqsave(&amp;desc-&gt;lock, flags);</span><br><span class="line"></span><br><span class="line">	<span class="comment">/*</span></span><br><span class="line"><span class="comment">	 * There can be multiple actions per IRQ descriptor, find the right</span></span><br><span class="line"><span class="comment">	 * one based on the dev_id:</span></span><br><span class="line"><span class="comment">	 */</span></span><br><span class="line">	action_ptr = &amp;desc-&gt;action;</span><br><span class="line">	<span class="keyword">for</span> (;;) &#123;</span><br><span class="line">		action = *action_ptr;</span><br><span class="line"></span><br><span class="line">		<span class="keyword">if</span> (!action) &#123;</span><br><span class="line">			WARN(<span class="number">1</span>, <span class="string">"Trying to free already-free IRQ %d\n"</span>, irq);</span><br><span class="line">			raw_spin_unlock_irqrestore(&amp;desc-&gt;lock, flags);</span><br><span class="line">			chip_bus_sync_unlock(desc);</span><br><span class="line">			mutex_unlock(&amp;desc-&gt;request_mutex);</span><br><span class="line">			<span class="keyword">return</span> <span class="literal">NULL</span>;</span><br><span class="line">		&#125;</span><br><span class="line"></span><br><span class="line">		<span class="keyword">if</span> (action-&gt;dev_id == dev_id)</span><br><span class="line">			<span class="keyword">break</span>;</span><br><span class="line">		action_ptr = &amp;action-&gt;next;</span><br><span class="line">	&#125;</span><br><span class="line"></span><br><span class="line">	<span class="comment">/* Found it - now remove it from the list of entries: */</span></span><br><span class="line">	*action_ptr = action-&gt;next;</span><br><span class="line"></span><br><span class="line">	irq_pm_remove_action(desc, action);</span><br><span class="line"></span><br><span class="line">	<span class="comment">/* If this was the last handler, shut down the IRQ line: */</span></span><br><span class="line">	<span class="keyword">if</span> (!desc-&gt;action) &#123;</span><br><span class="line">		irq_settings_clr_disable_unlazy(desc);</span><br><span class="line">		<span class="comment">/* Only shutdown. Deactivate after synchronize_hardirq() */</span></span><br><span class="line">		irq_shutdown(desc);</span><br><span class="line">	&#125;</span><br><span class="line">    ...</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>从上述源码可以看出，<code>struct irq_desc *desc = irq_to_desc(irq);</code>，首先根据中断号得到 desc 结构，然后在 <code>__free_irq()</code> 函数中，<strong>会根据这个中断号对应的 desc 结构所管理的 action 链表中找到与 dev_id 相对应的那个</strong>，然后删除。若是最后一个，会关掉这条中断请求线。</p>
+<p>上述仅是对共享中断号的中断处理程序的管理，当中断触发的时候，中断号的共享，还需要硬件的支持。<strong>当中断触发，会依次调用相关中断号上的所有中断处理程序，这些中断处理程序都跟一个设备相关联，要去检查，是否是所关联设备发出的中断，如果是，则执行中断处理函数，如果不是，则直接退出。所以这里还需要硬件提供一个状态寄存器供中断处理程序读取检查，不过，大多数硬件都能提供这样的寄存器。</strong> </p>
+<h2 id="编写中断处理程序"><a href="#编写中断处理程序" class="headerlink" title="编写中断处理程序"></a>编写中断处理程序</h2><p>按照注册中断时候的第二个参数格式，一个中断处理程序的固定格式如下：</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">static</span> irqreturn_t <span class="title">irq_func_name</span><span class="params">(<span class="keyword">unsigned</span> <span class="keyword">int</span> irq,<span class="keyword">void</span> *dev)</span></span>;</span><br></pre></td></tr></table></figure>
+
+<p>第一个参数就是这个中断处理程序要响应的中断的中断号；第二个参数是一个通用指针，<strong>它必须与注册中断时候传递的第五个参数相同！！！</strong> 返回值有两种可能：</p>
+<ol>
+<li><strong>IRQ_NONE</strong> :中断处理程序被调用，但是此次调用所传入的 dev 参数，不是注册时所指定的 dev，这时候中断处理程序就会返回 IRQ_NONE。</li>
+<li><strong>IRQ_HANDLED</strong> :中断处理程序被调用，此次调用所传入的 dev 参数，是注册时所指定的 dev，执行完成之后返回 IRQ_HANDLED。</li>
+</ol>
+<p><strong>当一个中断处理程序在执行的时候，相应的中断号会在所有处理器上被屏蔽掉，以防止同一个中断号接收另一个新的中断。通常，这个时候其他的中断号都是打开的，其他中断能够被处理，但是当前的中断号总是被禁止。由此可以看出，同一个中断处理程序，绝对不会被同时调用以嵌套处理。</strong> </p>
+<p>如果编写的是一个共享的中断处理程序，还应该注意：</p>
+<ol>
+<li>request_irq() 的参数必须设置 IRQF_SHARED 标志位。</li>
+<li>dev 参数必须唯一。</li>
+<li>中断处理程序需要有区分时候是其所关联硬件发起中断的能力，也就是在上面提到的，应该要去读取其设备的状态寄存器，得知是否是该设备发出的中断，如果不是，需要立即退出。</li>
+</ol>
+<p>以 IRQF_SHARED 标志位注册一个中断处理程序的时候，只有以下两种情况才会注册成功，一是这个中断号尚未被注册，二是之前所有注册这个中断号的所有中断处理程序都标记为了 IRQF_SHARED。</p>
+<h2 id="中断上下文"><a href="#中断上下文" class="headerlink" title="中断上下文"></a>中断上下文</h2><p>中断上下文与进程没有任何关系，与 current 宏也没有关系，因为没有后备进程，所以中断上下文是不能休眠的，否则的话，又如何对他重新调度呢？所以不能在中断上下文中调用会休眠的函数，这是对编写中断处理程序的限定。</p>
+<p>中断处理程序栈的设置是一个配置选项，以前中断上下文使用的是进程的内核栈，但是 2.6 版本之后，增加了一个选项，把内核栈的大小从两页减少到了一页，然后中断栈单独占据一页。</p>
+<h2 id="中断处理机制的实现"><a href="#中断处理机制的实现" class="headerlink" title="中断处理机制的实现"></a>中断处理机制的实现</h2><p><img src="/picture/%E4%B8%AD%E6%96%AD%E4%BB%8E%E7%A1%AC%E4%BB%B6%E5%88%B0%E5%86%85%E6%A0%B8%E7%9A%84%E8%B7%AF%E7%94%B1.jpg" alt="中断从硬件到内核的路由"></p>
+<ol>
+<li>设备产生中断，通过总线把电信号发送给中断控制器；</li>
+<li>如果对应的中断号没有被屏蔽，那么中断控制器把该中断发送到处理器；</li>
+<li><strong>处理器立即停止正在做的事情，关闭中断系统（设置了 IRQF_DIABLED 则屏蔽所有中断信号，否则只屏蔽当前中断号（线））</strong>，跳到内存中预定义的位置执行代码；（在 X86 体系结构下，应该就是下面代码中的 <code>common_interrupt</code> 部分）</li>
+<li>保存中断号，保存当前的处理器状态；（下面代码中的 <code>interrupt_entry</code> ）</li>
+<li>调用 do_IRQ()；</li>
+<li>如果当前的中断号对应有中断处理程序，则依次执行所有已经正确注册的中断处理程序；</li>
+<li>从中断返回，判断是否调度（关于调度，可以回顾第四章），恢复相关上下文，继续执行此后的代码。</li>
+</ol>
+<p>下面的代码摘录自 arch/x86/entry/entry_64.S ，主要是想说明怎么保存与恢复被中断程序的上下文。<strong>阅读下面代码，可以得出一个结论，不论被中断的是用户进程还是内核线程或者是另一个（同等优先级）中断，被中断的任务的上下文都会被保存下来，并在中断执行完成之后被恢复继续执行。而保存这些上下文的地方是 %rdi 寄存器（X86体系架构）。</strong></p>
+<figure class="highlight as"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br><span class="line">66</span><br><span class="line">67</span><br><span class="line">68</span><br><span class="line">69</span><br><span class="line">70</span><br><span class="line">71</span><br><span class="line">72</span><br><span class="line">73</span><br><span class="line">74</span><br><span class="line">75</span><br><span class="line">76</span><br><span class="line">77</span><br><span class="line">78</span><br><span class="line">79</span><br><span class="line">80</span><br><span class="line">81</span><br><span class="line">82</span><br><span class="line">83</span><br><span class="line">84</span><br><span class="line">85</span><br><span class="line">86</span><br><span class="line">87</span><br><span class="line">88</span><br><span class="line">89</span><br><span class="line">90</span><br><span class="line">91</span><br><span class="line">92</span><br><span class="line">93</span><br><span class="line">94</span><br><span class="line">95</span><br><span class="line">96</span><br><span class="line">97</span><br><span class="line">98</span><br><span class="line">99</span><br><span class="line">100</span><br><span class="line">101</span><br><span class="line">102</span><br><span class="line">103</span><br><span class="line">104</span><br><span class="line">105</span><br><span class="line">106</span><br><span class="line">107</span><br><span class="line">108</span><br><span class="line">109</span><br><span class="line">110</span><br><span class="line">111</span><br><span class="line">112</span><br><span class="line">113</span><br><span class="line">114</span><br><span class="line">115</span><br><span class="line">116</span><br><span class="line">117</span><br><span class="line">118</span><br><span class="line">119</span><br><span class="line">120</span><br><span class="line">121</span><br><span class="line">122</span><br><span class="line">123</span><br><span class="line">124</span><br><span class="line">125</span><br><span class="line">126</span><br><span class="line">127</span><br><span class="line">128</span><br><span class="line">129</span><br><span class="line">130</span><br><span class="line">131</span><br><span class="line">132</span><br><span class="line">133</span><br><span class="line">134</span><br><span class="line">135</span><br><span class="line">136</span><br><span class="line">137</span><br><span class="line">138</span><br><span class="line">139</span><br><span class="line">140</span><br><span class="line">141</span><br><span class="line">142</span><br><span class="line">143</span><br><span class="line">144</span><br><span class="line">145</span><br><span class="line">146</span><br><span class="line">147</span><br><span class="line">148</span><br><span class="line">149</span><br><span class="line">150</span><br><span class="line">151</span><br><span class="line">152</span><br><span class="line">153</span><br><span class="line">154</span><br><span class="line">155</span><br><span class="line">156</span><br><span class="line">157</span><br><span class="line">158</span><br><span class="line">159</span><br><span class="line">160</span><br><span class="line">161</span><br><span class="line">162</span><br><span class="line">163</span><br><span class="line">164</span><br><span class="line">165</span><br><span class="line">166</span><br><span class="line">167</span><br><span class="line">168</span><br><span class="line">169</span><br><span class="line">170</span><br><span class="line">171</span><br><span class="line">172</span><br><span class="line">173</span><br><span class="line">174</span><br><span class="line">175</span><br><span class="line">176</span><br><span class="line">177</span><br><span class="line">178</span><br><span class="line">179</span><br><span class="line">180</span><br><span class="line">181</span><br><span class="line">182</span><br><span class="line">183</span><br><span class="line">184</span><br><span class="line">185</span><br><span class="line">186</span><br><span class="line">187</span><br><span class="line">188</span><br><span class="line">189</span><br><span class="line">190</span><br><span class="line">191</span><br><span class="line">192</span><br><span class="line">193</span><br><span class="line">194</span><br><span class="line">195</span><br><span class="line">196</span><br><span class="line">197</span><br><span class="line">198</span><br><span class="line">199</span><br><span class="line">200</span><br><span class="line">201</span><br><span class="line">202</span><br><span class="line">203</span><br><span class="line">204</span><br><span class="line">205</span><br><span class="line">206</span><br><span class="line">207</span><br><span class="line">208</span><br><span class="line">209</span><br><span class="line">210</span><br><span class="line">211</span><br><span class="line">212</span><br><span class="line">213</span><br><span class="line">214</span><br><span class="line">215</span><br><span class="line">216</span><br><span class="line">217</span><br><span class="line">218</span><br><span class="line">219</span><br><span class="line">220</span><br><span class="line">221</span><br><span class="line">222</span><br><span class="line">223</span><br><span class="line">224</span><br><span class="line">225</span><br><span class="line">226</span><br><span class="line">227</span><br><span class="line">228</span><br><span class="line">229</span><br><span class="line">230</span><br><span class="line">231</span><br><span class="line">232</span><br><span class="line">233</span><br><span class="line">234</span><br><span class="line">235</span><br><span class="line">236</span><br><span class="line">237</span><br><span class="line">238</span><br><span class="line">239</span><br><span class="line">240</span><br><span class="line">241</span><br><span class="line">242</span><br><span class="line">243</span><br><span class="line">244</span><br><span class="line">245</span><br><span class="line">246</span><br><span class="line">247</span><br><span class="line">248</span><br><span class="line">249</span><br><span class="line">250</span><br><span class="line">251</span><br><span class="line">252</span><br><span class="line">253</span><br><span class="line">254</span><br><span class="line">255</span><br><span class="line">256</span><br><span class="line">257</span><br><span class="line">258</span><br><span class="line">259</span><br><span class="line">260</span><br><span class="line">261</span><br><span class="line">262</span><br></pre></td><td class="code"><pre><span class="line">ENTRY(interrupt_entry)</span><br><span class="line">	UNWIND_HINT_FUNC</span><br><span class="line">	ASM_CLAC</span><br><span class="line">	cld</span><br><span class="line"></span><br><span class="line">	testb	$<span class="number">3</span>, CS-ORIG_RAX+<span class="number">8</span>(%rsp)</span><br><span class="line">	jz	<span class="number">1</span>f</span><br><span class="line">	SWAPGS</span><br><span class="line"></span><br><span class="line">	<span class="comment">/*</span></span><br><span class="line"><span class="comment">	 * Switch to the thread stack. The IRET frame and orig_ax are</span></span><br><span class="line"><span class="comment">	 * on the stack, as well as the return address. RDI..R12 are</span></span><br><span class="line"><span class="comment">	 * not (yet) on the stack and space has not (yet) been</span></span><br><span class="line"><span class="comment">	 * allocated for them.</span></span><br><span class="line"><span class="comment">	 */</span></span><br><span class="line">	pushq	%rdi</span><br><span class="line"></span><br><span class="line">	<span class="comment">/* Need to switch before accessing the thread stack. */</span></span><br><span class="line">	SWITCH_TO_KERNEL_CR3 scratch_reg=%rdi</span><br><span class="line">	movq	%rsp, %rdi</span><br><span class="line">	movq	PER_CPU_VAR(cpu_current_top_of_stack), %rsp</span><br><span class="line"></span><br><span class="line">	 <span class="comment">/*</span></span><br><span class="line"><span class="comment">	  * We have RDI, return address, and orig_ax on the stack on</span></span><br><span class="line"><span class="comment">	  * top of the IRET frame. That means offset=24</span></span><br><span class="line"><span class="comment">	  */</span></span><br><span class="line">	UNWIND_HINT_IRET_REGS base=%rdi offset=<span class="number">24</span></span><br><span class="line"></span><br><span class="line">	pushq	<span class="number">7</span>*<span class="number">8</span>(%rdi)		<span class="comment">/* regs-&gt;ss */</span></span><br><span class="line">	pushq	<span class="number">6</span>*<span class="number">8</span>(%rdi)		<span class="comment">/* regs-&gt;rsp */</span></span><br><span class="line">	pushq	<span class="number">5</span>*<span class="number">8</span>(%rdi)		<span class="comment">/* regs-&gt;eflags */</span></span><br><span class="line">	pushq	<span class="number">4</span>*<span class="number">8</span>(%rdi)		<span class="comment">/* regs-&gt;cs */</span></span><br><span class="line">	pushq	<span class="number">3</span>*<span class="number">8</span>(%rdi)		<span class="comment">/* regs-&gt;ip */</span></span><br><span class="line">	pushq	<span class="number">2</span>*<span class="number">8</span>(%rdi)		<span class="comment">/* regs-&gt;orig_ax */</span></span><br><span class="line">	pushq	<span class="number">8</span>(%rdi)			<span class="comment">/* return address */</span></span><br><span class="line">	UNWIND_HINT_FUNC</span><br><span class="line"></span><br><span class="line">	movq	(%rdi), %rdi</span><br><span class="line"><span class="number">1</span>:</span><br><span class="line"></span><br><span class="line">	PUSH_AND_CLEAR_REGS save_ret=<span class="number">1</span></span><br><span class="line">	ENCODE_FRAME_POINTER <span class="number">8</span></span><br><span class="line"></span><br><span class="line">	testb	$<span class="number">3</span>, CS+<span class="number">8</span>(%rsp)</span><br><span class="line">	jz	<span class="number">1</span>f</span><br><span class="line"></span><br><span class="line">	<span class="comment">/*</span></span><br><span class="line"><span class="comment">	 * IRQ from user mode.</span></span><br><span class="line"><span class="comment">	 *</span></span><br><span class="line"><span class="comment">	 * We need to tell lockdep that IRQs are off.  We can't do this until</span></span><br><span class="line"><span class="comment">	 * we fix gsbase, and we should do it before enter_from_user_mode</span></span><br><span class="line"><span class="comment">	 * (which can take locks).  Since TRACE_IRQS_OFF is idempotent,</span></span><br><span class="line"><span class="comment">	 * the simplest way to handle it is to just call it twice if</span></span><br><span class="line"><span class="comment">	 * we enter from user mode.  There's no reason to optimize this since</span></span><br><span class="line"><span class="comment">	 * TRACE_IRQS_OFF is a no-op if lockdep is off.</span></span><br><span class="line"><span class="comment">	 */</span></span><br><span class="line">	TRACE_IRQS_OFF</span><br><span class="line"></span><br><span class="line">	CALL_enter_from_user_mode</span><br><span class="line"></span><br><span class="line"><span class="number">1</span>:</span><br><span class="line">	ENTER_IRQ_STACK old_rsp=%rdi save_ret=<span class="number">1</span></span><br><span class="line">	<span class="comment">/* We entered an interrupt context - irqs are off: */</span></span><br><span class="line">	TRACE_IRQS_OFF</span><br><span class="line"></span><br><span class="line">	ret</span><br><span class="line">END(interrupt_entry)</span><br><span class="line">_ASM_NOKPROBE(interrupt_entry)</span><br><span class="line"></span><br><span class="line"><span class="comment">/*--------------------------------------------------*/</span></span><br><span class="line"></span><br><span class="line">common_interrupt:</span><br><span class="line">	addq	$<span class="number">-0x80</span>, (%rsp)			<span class="comment">/* Adjust vector to [-256, -1] range */</span></span><br><span class="line">	call	interrupt_entry</span><br><span class="line">	UNWIND_HINT_REGS indirect=<span class="number">1</span></span><br><span class="line">	call	do_IRQ	<span class="comment">/* rdi points to pt_regs */</span></span><br><span class="line">	<span class="comment">/* 0(%rsp): old RSP */</span></span><br><span class="line">ret_from_intr:</span><br><span class="line">	DISABLE_INTERRUPTS(CLBR_ANY)</span><br><span class="line">	TRACE_IRQS_OFF</span><br><span class="line"></span><br><span class="line">	LEAVE_IRQ_STACK</span><br><span class="line"></span><br><span class="line">	testb	$<span class="number">3</span>, CS(%rsp)</span><br><span class="line">	jz	retint_kernel</span><br><span class="line"></span><br><span class="line">	<span class="comment">/* Interrupt came from user space */</span></span><br><span class="line">GLOBAL(retint_user)</span><br><span class="line">	mov	%rsp,%rdi</span><br><span class="line">	call	prepare_exit_to_usermode</span><br><span class="line">	TRACE_IRQS_IRETQ</span><br><span class="line"></span><br><span class="line">GLOBAL(swapgs_restore_regs_and_return_to_usermode)</span><br><span class="line">#ifdef CONFIG_DEBUG_ENTRY</span><br><span class="line">	<span class="comment">/* Assert that pt_regs indicates user mode. */</span></span><br><span class="line">	testb	$<span class="number">3</span>, CS(%rsp)</span><br><span class="line">	jnz	<span class="number">1</span>f</span><br><span class="line">	ud2</span><br><span class="line"><span class="number">1</span>:</span><br><span class="line">#endif</span><br><span class="line">	POP_REGS pop_rdi=<span class="number">0</span></span><br><span class="line"></span><br><span class="line">	<span class="comment">/*</span></span><br><span class="line"><span class="comment">	 * The stack is now user RDI, orig_ax, RIP, CS, EFLAGS, RSP, SS.</span></span><br><span class="line"><span class="comment">	 * Save old stack pointer and switch to trampoline stack.</span></span><br><span class="line"><span class="comment">	 */</span></span><br><span class="line">	movq	%rsp, %rdi</span><br><span class="line">	movq	PER_CPU_VAR(cpu_tss_rw + TSS_sp0), %rsp</span><br><span class="line"></span><br><span class="line">	<span class="comment">/* Copy the IRET frame to the trampoline stack. */</span></span><br><span class="line">	pushq	<span class="number">6</span>*<span class="number">8</span>(%rdi)	<span class="comment">/* SS */</span></span><br><span class="line">	pushq	<span class="number">5</span>*<span class="number">8</span>(%rdi)	<span class="comment">/* RSP */</span></span><br><span class="line">	pushq	<span class="number">4</span>*<span class="number">8</span>(%rdi)	<span class="comment">/* EFLAGS */</span></span><br><span class="line">	pushq	<span class="number">3</span>*<span class="number">8</span>(%rdi)	<span class="comment">/* CS */</span></span><br><span class="line">	pushq	<span class="number">2</span>*<span class="number">8</span>(%rdi)	<span class="comment">/* RIP */</span></span><br><span class="line"></span><br><span class="line">	<span class="comment">/* Push user RDI on the trampoline stack. */</span></span><br><span class="line">	pushq	(%rdi)</span><br><span class="line"></span><br><span class="line">	<span class="comment">/*</span></span><br><span class="line"><span class="comment">	 * We are on the trampoline stack.  All regs except RDI are live.</span></span><br><span class="line"><span class="comment">	 * We can do future final exit work right here.</span></span><br><span class="line"><span class="comment">	 */</span></span><br><span class="line">	STACKLEAK_ERASE_NOCLOBBER</span><br><span class="line"></span><br><span class="line">	SWITCH_TO_USER_CR3_STACK scratch_reg=%rdi</span><br><span class="line"></span><br><span class="line">	<span class="comment">/* Restore RDI. */</span></span><br><span class="line">	popq	%rdi</span><br><span class="line">	SWAPGS</span><br><span class="line">	INTERRUPT_RETURN</span><br><span class="line"></span><br><span class="line"></span><br><span class="line"><span class="comment">/* Returning to kernel space */</span></span><br><span class="line">retint_kernel:</span><br><span class="line">#ifdef CONFIG_PREEMPT</span><br><span class="line">	<span class="comment">/* Interrupts are off */</span></span><br><span class="line">	<span class="comment">/* Check if we need preemption */</span></span><br><span class="line">	btl	$<span class="number">9</span>, EFLAGS(%rsp)		<span class="comment">/* were interrupts off? */</span></span><br><span class="line">	jnc	<span class="number">1</span>f</span><br><span class="line">	cmpl	$<span class="number">0</span>, PER_CPU_VAR(__preempt_count)</span><br><span class="line">	jnz	<span class="number">1</span>f</span><br><span class="line">	call	preempt_schedule_irq</span><br><span class="line"><span class="number">1</span>:</span><br><span class="line">#endif</span><br><span class="line">	<span class="comment">/*</span></span><br><span class="line"><span class="comment">	 * The iretq could re-enable interrupts:</span></span><br><span class="line"><span class="comment">	 */</span></span><br><span class="line">	TRACE_IRQS_IRETQ</span><br><span class="line"></span><br><span class="line">GLOBAL(restore_regs_and_return_to_kernel)</span><br><span class="line">#ifdef CONFIG_DEBUG_ENTRY</span><br><span class="line">	<span class="comment">/* Assert that pt_regs indicates kernel mode. */</span></span><br><span class="line">	testb	$<span class="number">3</span>, CS(%rsp)</span><br><span class="line">	jz	<span class="number">1</span>f</span><br><span class="line">	ud2</span><br><span class="line"><span class="number">1</span>:</span><br><span class="line">#endif</span><br><span class="line">	POP_REGS</span><br><span class="line">	addq	$<span class="number">8</span>, %rsp	<span class="comment">/* skip regs-&gt;orig_ax */</span></span><br><span class="line">	<span class="comment">/*</span></span><br><span class="line"><span class="comment">	 * ARCH_HAS_MEMBARRIER_SYNC_CORE rely on IRET core serialization</span></span><br><span class="line"><span class="comment">	 * when returning from IPI handler.</span></span><br><span class="line"><span class="comment">	 */</span></span><br><span class="line">	INTERRUPT_RETURN</span><br><span class="line"></span><br><span class="line">ENTRY(native_iret)</span><br><span class="line">	UNWIND_HINT_IRET_REGS</span><br><span class="line">	<span class="comment">/*</span></span><br><span class="line"><span class="comment">	 * Are we returning to a stack segment from the LDT?  Note: in</span></span><br><span class="line"><span class="comment">	 * 64-bit mode SS:RSP on the exception stack is always valid.</span></span><br><span class="line"><span class="comment">	 */</span></span><br><span class="line">#ifdef CONFIG_X86_ESPFIX64</span><br><span class="line">	testb	$<span class="number">4</span>, (SS-RIP)(%rsp)</span><br><span class="line">	jnz	native_irq_return_ldt</span><br><span class="line">#endif</span><br><span class="line"></span><br><span class="line">.global native_irq_return_iret</span><br><span class="line">native_irq_return_iret:</span><br><span class="line">	<span class="comment">/*</span></span><br><span class="line"><span class="comment">	 * This may fault.  Non-paranoid faults on return to userspace are</span></span><br><span class="line"><span class="comment">	 * handled by fixup_bad_iret.  These include #SS, #GP, and #NP.</span></span><br><span class="line"><span class="comment">	 * Double-faults due to espfix64 are handled in do_double_fault.</span></span><br><span class="line"><span class="comment">	 * Other faults here are fatal.</span></span><br><span class="line"><span class="comment">	 */</span></span><br><span class="line">	iretq</span><br><span class="line"></span><br><span class="line">#ifdef CONFIG_X86_ESPFIX64</span><br><span class="line">native_irq_return_ldt:</span><br><span class="line">	<span class="comment">/*</span></span><br><span class="line"><span class="comment">	 * We are running with user GSBASE.  All GPRs contain their user</span></span><br><span class="line"><span class="comment">	 * values.  We have a percpu ESPFIX stack that is eight slots</span></span><br><span class="line"><span class="comment">	 * long (see ESPFIX_STACK_SIZE).  espfix_waddr points to the bottom</span></span><br><span class="line"><span class="comment">	 * of the ESPFIX stack.</span></span><br><span class="line"><span class="comment">	 *</span></span><br><span class="line"><span class="comment">	 * We clobber RAX and RDI in this code.  We stash RDI on the</span></span><br><span class="line"><span class="comment">	 * normal stack and RAX on the ESPFIX stack.</span></span><br><span class="line"><span class="comment">	 *</span></span><br><span class="line"><span class="comment">	 * The ESPFIX stack layout we set up looks like this:</span></span><br><span class="line"><span class="comment">	 *</span></span><br><span class="line"><span class="comment">	 * --- top of ESPFIX stack ---</span></span><br><span class="line"><span class="comment">	 * SS</span></span><br><span class="line"><span class="comment">	 * RSP</span></span><br><span class="line"><span class="comment">	 * RFLAGS</span></span><br><span class="line"><span class="comment">	 * CS</span></span><br><span class="line"><span class="comment">	 * RIP  &lt;-- RSP points here when we're done</span></span><br><span class="line"><span class="comment">	 * RAX  &lt;-- espfix_waddr points here</span></span><br><span class="line"><span class="comment">	 * --- bottom of ESPFIX stack ---</span></span><br><span class="line"><span class="comment">	 */</span></span><br><span class="line"></span><br><span class="line">	pushq	%rdi				<span class="comment">/* Stash user RDI */</span></span><br><span class="line">	SWAPGS					<span class="comment">/* to kernel GS */</span></span><br><span class="line">	SWITCH_TO_KERNEL_CR3 scratch_reg=%rdi	<span class="comment">/* to kernel CR3 */</span></span><br><span class="line"></span><br><span class="line">	movq	PER_CPU_VAR(espfix_waddr), %rdi</span><br><span class="line">	movq	%rax, (<span class="number">0</span>*<span class="number">8</span>)(%rdi)		<span class="comment">/* user RAX */</span></span><br><span class="line">	movq	(<span class="number">1</span>*<span class="number">8</span>)(%rsp), %rax		<span class="comment">/* user RIP */</span></span><br><span class="line">	movq	%rax, (<span class="number">1</span>*<span class="number">8</span>)(%rdi)</span><br><span class="line">	movq	(<span class="number">2</span>*<span class="number">8</span>)(%rsp), %rax		<span class="comment">/* user CS */</span></span><br><span class="line">	movq	%rax, (<span class="number">2</span>*<span class="number">8</span>)(%rdi)</span><br><span class="line">	movq	(<span class="number">3</span>*<span class="number">8</span>)(%rsp), %rax		<span class="comment">/* user RFLAGS */</span></span><br><span class="line">	movq	%rax, (<span class="number">3</span>*<span class="number">8</span>)(%rdi)</span><br><span class="line">	movq	(<span class="number">5</span>*<span class="number">8</span>)(%rsp), %rax		<span class="comment">/* user SS */</span></span><br><span class="line">	movq	%rax, (<span class="number">5</span>*<span class="number">8</span>)(%rdi)</span><br><span class="line">	movq	(<span class="number">4</span>*<span class="number">8</span>)(%rsp), %rax		<span class="comment">/* user RSP */</span></span><br><span class="line">	movq	%rax, (<span class="number">4</span>*<span class="number">8</span>)(%rdi)</span><br><span class="line">	<span class="comment">/* Now RAX == RSP. */</span></span><br><span class="line"></span><br><span class="line">	andl	$<span class="number">0xffff0000</span>, %eax		<span class="comment">/* RAX = (RSP &amp; 0xffff0000) */</span></span><br><span class="line"></span><br><span class="line">	<span class="comment">/*</span></span><br><span class="line"><span class="comment">	 * espfix_stack[31:16] == 0.  The page tables are set up such that</span></span><br><span class="line"><span class="comment">	 * (espfix_stack | (X &amp; 0xffff0000)) points to a read-only alias of</span></span><br><span class="line"><span class="comment">	 * espfix_waddr for any X.  That is, there are 65536 RO aliases of</span></span><br><span class="line"><span class="comment">	 * the same page.  Set up RSP so that RSP[31:16] contains the</span></span><br><span class="line"><span class="comment">	 * respective 16 bits of the /userspace/ RSP and RSP nonetheless</span></span><br><span class="line"><span class="comment">	 * still points to an RO alias of the ESPFIX stack.</span></span><br><span class="line"><span class="comment">	 */</span></span><br><span class="line">	orq	PER_CPU_VAR(espfix_stack), %rax</span><br><span class="line"></span><br><span class="line">	SWITCH_TO_USER_CR3_STACK scratch_reg=%rdi</span><br><span class="line">	SWAPGS					<span class="comment">/* to user GS */</span></span><br><span class="line">	popq	%rdi				<span class="comment">/* Restore user RDI */</span></span><br><span class="line"></span><br><span class="line">	movq	%rax, %rsp</span><br><span class="line">	UNWIND_HINT_IRET_REGS offset=<span class="number">8</span></span><br><span class="line"></span><br><span class="line">	<span class="comment">/*</span></span><br><span class="line"><span class="comment">	 * At this point, we cannot write to the stack any more, but we can</span></span><br><span class="line"><span class="comment">	 * still read.</span></span><br><span class="line"><span class="comment">	 */</span></span><br><span class="line">	popq	%rax				<span class="comment">/* Restore user RAX */</span></span><br><span class="line"></span><br><span class="line">	<span class="comment">/*</span></span><br><span class="line"><span class="comment">	 * RSP now points to an ordinary IRET frame, except that the page</span></span><br><span class="line"><span class="comment">	 * is read-only and RSP[31:16] are preloaded with the userspace</span></span><br><span class="line"><span class="comment">	 * values.  We can now IRET back to userspace.</span></span><br><span class="line"><span class="comment">	 */</span></span><br><span class="line">	jmp	native_irq_return_iret</span><br><span class="line">#endif</span><br><span class="line">END(common_interrupt)</span><br><span class="line">_ASM_NOKPROBE(common_interrupt)</span><br></pre></td></tr></table></figure>
+
+<h2 id="proc-interrupts"><a href="#proc-interrupts" class="headerlink" title="/proc/interrupts"></a>/proc/interrupts</h2><p>procfs 是一个虚拟文件系统，<strong>只存在于内核内存，</strong> 一般安装于 <code>/proc</code> 目录。在 procfs 下读写文件都要调用内核函数，这些函数模拟从真实文件的读写。<strong>/proc/interrupts 存放的是系统中与中断相关的统计信息。</strong> </p>
+<p><img src="/picture/catinterrupts.jpg" alt="该文件输出信息尚未截图"></p>
+<ol>
+<li>第 1 列是中断号（中断线）；</li>
+<li>第 2 列是接收中断的统计计数器，也就是接收到的中断次数；</li>
+<li>第 3 列是处理这个中断的中断控制器；</li>
+<li>第 4 列是设备的 ascii 名称，也就是注册中断处理函数的第四个参数值。如果中断是共享的，那么这一列上会有以逗号+空格隔开的多个设备名字</li>
+</ol>
+<h2 id="中断控制"><a href="#中断控制" class="headerlink" title="中断控制"></a>中断控制</h2><p>linux 内核提供了一套接口，用来控制机器上的中断状态。这些接口为我们提供的能力有 <strong>禁止机器上的中断系统（完全屏蔽）</strong> 和 <strong>屏蔽掉某一条中断线（屏蔽某一个中断号）</strong> 。</p>
+<p>为什么需要这些功能呢？是为了提供同步机制。在代码里面屏蔽中断是为了防止中断处理程序抢占当前进程（不论是用户进程还是内核进程），而访问了共享资源。</p>
+<p>上述是一个方面，另一个方面，linux 支持多处理器，linux 还提供了一套锁机制来保护共享资源。在访问共享资源之前，应该获得某种锁，使用完资源之后，解锁。这是为了保护共享资源，以免被另一个处理器同时访问。</p>
+<h3 id="禁止和激活中断"><a href="#禁止和激活中断" class="headerlink" title="禁止和激活中断"></a>禁止和激活中断</h3><p>用于禁止当前处理器上的本地中断，然后又激活他们：</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">local_irq_disable();</span><br><span class="line"><span class="comment">/*已经禁止中断了*/</span></span><br><span class="line">local_irq_enable();</span><br></pre></td></tr></table></figure>
+
+<p>上述的接口是一个粗暴地接口，全禁以及全开。对于全禁而言，尚可理解，不过，如果在使用 <code>local_irq_disable()</code> 之前已经调用过这个接口了，那么会带来一些潜在的危险。而如果直接调用 <code>local_irq_enable</code> 就有点粗暴了，原本被关闭的中断也会因为这个调用而被打开。</p>
+<p>为了解决上面的两个问题，还有另一套接口可以使用:</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">unsigned</span> <span class="keyword">long</span> flags;</span><br><span class="line"></span><br><span class="line">local_irq_save(flags);</span><br><span class="line"><span class="comment">/*中断已禁止，访问共享资源*/</span></span><br><span class="line">local_irq_restore(flags);<span class="comment">/*恢复中断到禁止之前的状态*/</span></span><br></pre></td></tr></table></figure>
+
+<p><strong>首先最明显的一点就是，不再是简单的全开中断，而是恢复到之前的状态。此外，因为 flags 跟体系结构有关（有一种体系结构是把该值与栈帧相关），不能作为参数被传递到别处，所以只能出现在同一个栈帧中，即，这一对函数的调用，必须出现在同一个代码块中，这就可以尽可能避免了关闭已经关闭的中断的情况。</strong></p>
+<h3 id="禁止指定中断线"><a href="#禁止指定中断线" class="headerlink" title="禁止指定中断线"></a>禁止指定中断线</h3><p>只针对某一条中断线上的所有设备，禁止他们传递中断信号，接口如下：</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">void</span> <span class="title">disable_irq</span><span class="params">(<span class="keyword">unsigned</span> <span class="keyword">int</span> irq)</span></span>;</span><br><span class="line"><span class="function"><span class="keyword">void</span> <span class="title">disable_irq_nosync</span><span class="params">(<span class="keyword">unsigned</span> <span class="keyword">int</span> irq)</span></span>;</span><br><span class="line"><span class="function"><span class="keyword">void</span> <span class="title">enable_irq</span><span class="params">(<span class="keyword">unsigned</span> <span class="keyword">int</span> irq)</span></span>;</span><br><span class="line"><span class="function"><span class="keyword">void</span> <span class="title">synchronize_irq</span><span class="params">(<span class="keyword">unsigned</span> <span class="keyword">int</span> irq)</span></span>;</span><br></pre></td></tr></table></figure>
+
+<ol>
+<li><code>disable_irq(irq)</code> 函数需要等待 irq 指定的中断线上的所有中断处理程序退出之后才返回，返回之后该中断线被屏蔽。</li>
+<li><code>disable_irq_nosync(irq)</code> 则无需等待中断处理程序的退出，直接返回，返回之后该中断线被屏蔽。</li>
+<li><code>synchronize_irq(irq)</code> 等待 irq 指定的中断线上的所有中断处理程序退出之后才返回。</li>
+<li><code>enable_irq(irq)</code> 应该出现在每一个 <code>disable_irq(irq)</code> 或者 <code>disable_irq_nosync(irq)</code> 之后。</li>
+</ol>
+<p>有一个值得注意的点，这些函数都可以嵌套调用，并且可以在中断上下文中使用，并不会引起睡眠。如果是嵌套调用，那么要是 <code>disable_xxx()</code> 被调用了 n 次，那么 <code>enable_irq()</code> 也要调用 n 次，该中断线才是真的被激活了，否则仍然处于屏蔽状态。</p>
+<p><strong>上述的接口，不应该在新式的设备中使用，因为新的设备都是支持中断号共享的，如果禁止，是禁止了整个线上的所有设备。</strong> 上述的接口，在老式的设备中更可能被用到。</p>
+<h3 id="中断系统的状态"><a href="#中断系统的状态" class="headerlink" title="中断系统的状态"></a>中断系统的状态</h3><p>主要是通过一些接口来得知，自己是否处于中断上下文状态，本地中断是否被禁止。其中判断当前是否在中断上下文情况会用的比较多，因为如果要执行会引起睡眠的代码，是不能在中断上下文中执行的。</p>
+<table>
+<thead>
+<tr>
+<th>函数</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>irqs_disabled()</td>
+<td>如果本地中断传递被禁止，那么返回非 0 ，否则返回 0</td>
+</tr>
+<tr>
+<td>in_interrupt()</td>
+<td>如果内核处于任何形式的中断上下文中，返回非 0 ，要么是正在执行中断处理程序，要么是在执行中断处理程序的下半部分；否则返回 0</td>
+</tr>
+<tr>
+<td>in_irq()</td>
+<td>如果当前正在执行中断处理程序，返回非 0 ，否则返回 0</td>
+</tr>
+</tbody></table>
+
+        </div>
+
+        
+            <section class="post-copyright">
+                
+                    <p class="copyright-item">
+                        <span>Author:</span>
+                        <span>LouisozZ</span>
+                    </p>
+                
+                
+                    <p class="copyright-item">
+                        <span>Permalink:</span>
+                        <span><a href="http://louisozz.github.io/post/2019/linux内核设计与实现/第7章-中断和中断处理/">http://louisozz.github.io/post/2019/linux内核设计与实现/第7章-中断和中断处理/</a></span>
+                    </p>
+                
+                
+                    <p class="copyright-item">
+                        <span>License:</span>
+                        <span>Copyright (c) 2019 <a href="http://creativecommons.org/licenses/by-nc/4.0/">CC-BY-NC-4.0</a> LICENSE</span>
+                    </p>
+                
+                
+                     <p class="copyright-item">
+                         <span>Slogan:</span>
+                         <span>Do you believe in <strong>DESTINY<strong>?</strong></strong></span>
+                     </p>
+                
+
+            </section>
+        
+        <section class="post-tags">
+            <div>
+                <span>Tag(s):</span>
+                <span class="tag">
+                    
+                    
+                        <a href="/tags/linux/"># linux</a>
+                    
+                        
+                </span>
+            </div>
+            <div>
+                <a href="javascript:window.history.back();">back</a>
+                <span>· </span>
+                <a href="/">home</a>
+            </div>
+        </section>
+        <section class="post-nav">
+            
+                <a class="prev" rel="prev" href="/post/2019/linux内核设计与实现/第8章-下半部和推后执行的工作/">《Linux内核设计与实现》/第8章-下半部和推后执行的工作</a>
+            
+            
+            <a class="next" rel="next" href="/post/2019/linux内核设计与实现/第6章-内核数据结构/">《Linux内核设计与实现》/第6章-内核数据结构</a>
+            
+        </section>
+
+
+    </article>
+</div>
+
+        </div>
+        <footer id="footer" class="footer">
+    <div class="copyright">
+        <span>© LouisozZ | Powered by <a href="https://hexo.io" target="_blank">Hexo</a> & <a href="https://github.com/Siricee/hexo-theme-Chic" target="_blank">Chic</a></span>
+    </div>
+</footer>
+
+    </div>
+</body>
+</html>

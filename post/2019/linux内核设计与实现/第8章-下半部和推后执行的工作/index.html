@@ -1,0 +1,582 @@
+<!DOCTYPE html>
+<html lang="en">
+<head><meta name="generator" content="Hexo 3.9.0">
+    <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, user-scalable=no, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0">
+<meta http-equiv="X-UA-Compatible" content="ie=edge">
+
+
+
+<title>《Linux内核设计与实现》/第8章-下半部和推后执行的工作 | LouisozZ的博客</title>
+
+
+
+    <link rel="icon" href="/head.png">
+
+
+
+
+    <!-- stylesheets list from _config.yml -->
+    
+    <link rel="stylesheet" href="/css/style.css">
+    
+
+
+
+    <!-- scripts list from _config.yml -->
+    
+    <script src="/js/script.js"></script>
+    
+    <script src="/js/tocbot.min.js"></script>
+    
+
+
+
+    
+    
+        
+    
+
+
+</head>
+<body>
+    <div class="wrapper">
+        <header>
+    <nav class="navbar">
+        <div class="container">
+            <div class="navbar-header header-logo"><a href="/">LouisozZ 的博客</a></div>
+            <div class="menu navbar-right">
+                
+                    <a class="menu-item" href="/archives">Posts</a>
+                
+                    <a class="menu-item" href="/category">Categories</a>
+                
+                    <a class="menu-item" href="/tag">Tags</a>
+                
+                    <a class="menu-item" href="/about">About</a>
+                
+                <input id="switch_default" type="checkbox" class="switch_default">
+                <label for="switch_default" class="toggleBtn"></label>
+            </div>
+
+        </div>
+    </nav>
+
+    
+    <nav class="navbar-mobile" id="nav-mobile">
+        <div class="container">
+            <div class="navbar-header">
+                <div>
+                    <a href="/">LouisozZ 的博客</a><a id="mobile-toggle-theme">·&nbsp;Light</a>
+                </div>
+                <div class="menu-toggle" onclick="mobileBtn()">&#9776; Menu</div>
+            </div>
+            <div class="menu" id="mobile-menu">
+                
+                    <a class="menu-item" href="/archives">Posts</a>
+                
+                    <a class="menu-item" href="/category">Categories</a>
+                
+                    <a class="menu-item" href="/tag">Tags</a>
+                
+                    <a class="menu-item" href="/about">About</a>
+                
+            </div>
+        </div>
+    </nav>
+
+</header>
+<script>
+    var mobileBtn = function f() {
+        var toggleMenu = document.getElementsByClassName("menu-toggle")[0];
+        var mobileMenu = document.getElementById("mobile-menu");
+        if(toggleMenu.classList.contains("active")){
+           toggleMenu.classList.remove("active")
+            mobileMenu.classList.remove("active")
+        }else{
+            toggleMenu.classList.add("active")
+            mobileMenu.classList.add("active")
+        }
+    }
+</script>
+        <div class="main">
+            <div class="container">
+    
+    
+        <div class="post-toc">
+    <div class="tocbot-list">
+    </div>
+    <div class="tocbot-list-menu">
+        <a class="tocbot-toc-expand" onclick="expand_toc()">Expand all</a>
+        <a onclick="go_top()">Back to top</a>
+        <a onclick="go_bottom()">Go to bottom</a>
+    </div>
+</div>
+
+<script>
+    document.ready(
+        function () {
+            tocbot.init({
+                tocSelector: '.tocbot-list',
+                contentSelector: '.post-content',
+                headingSelector: 'h1, h2, h3, h4, h5',
+                collapseDepth: 1,
+                orderedList: false,
+                scrollSmooth: true,
+            })
+        }
+    )
+
+    function expand_toc() {
+        var b = document.querySelector(".tocbot-toc-expand");
+        tocbot.init({
+            tocSelector: '.tocbot-list',
+            contentSelector: '.post-content',
+            headingSelector: 'h1, h2, h3, h4, h5',
+            collapseDepth: 6,
+            orderedList: false,
+            scrollSmooth: true,
+        });
+        b.setAttribute("onclick", "collapse_toc()");
+        b.innerHTML = "Collapse all"
+    }
+
+    function collapse_toc() {
+        var b = document.querySelector(".tocbot-toc-expand");
+        tocbot.init({
+            tocSelector: '.tocbot-list',
+            contentSelector: '.post-content',
+            headingSelector: 'h1, h2, h3, h4, h5',
+            collapseDepth: 1,
+            orderedList: false,
+            scrollSmooth: true,
+        });
+        b.setAttribute("onclick", "expand_toc()");
+        b.innerHTML = "Expand all"
+    }
+
+    function go_top() {
+        window.scrollTo(0, 0);
+    }
+
+    function go_bottom() {
+        window.scrollTo(0, document.body.scrollHeight);
+    }
+
+</script>
+    
+
+    
+    <article class="post-wrap">
+        <header class="post-header">
+            <h1 class="post-title">《Linux内核设计与实现》/第8章-下半部和推后执行的工作</h1>
+            
+                <div class="post-meta">
+                    
+                        Author: <a itemprop="author" rel="author" href="/">LouisozZ</a>
+                    
+
+                    
+                        <span class="post-time">
+                        Date: <a href="#">August 8, 2019&nbsp;&nbsp;11:10:54</a>
+                        </span>
+                    
+                    
+                        <span class="post-category">
+                    Category:
+                            
+                                <a href="/categories/linux内核/">linux内核</a>
+                            
+                        </span>
+                    
+                </div>
+            
+        </header>
+
+        <div class="post-content">
+            <!-- # 第 8 章 &nbsp;&nbsp; 下半部和推后执行的工作 -->
+
+<!-- TOC -->
+<ul>
+<li><a href="#下半部">下半部</a><ul>
+<li><a href="#为什么要使用下半部">为什么要使用下半部</a></li>
+</ul>
+</li>
+<li><a href="#软中断">软中断</a><ul>
+<li><a href="#软中断的执行过程">软中断的执行过程</a></li>
+</ul>
+</li>
+<li><a href="#tasklet">tasklet</a><ul>
+<li><a href="#tasklet-的实现">tasklet 的实现</a></li>
+<li><a href="#设置-tasklet-为调度态">设置 tasklet 为调度态</a></li>
+<li><a href="#使用-tasklet">使用 tasklet</a></li>
+<li><a href="#ksoftirqd-内核线程">ksoftirqd 内核线程</a></li>
+</ul>
+</li>
+<li><a href="#工作队列">工作队列</a><ul>
+<li><a href="#工作队列的使用">工作队列的使用</a></li>
+</ul>
+</li>
+<li><a href="#下半部机制的选择">下半部机制的选择</a></li>
+<li><a href="#在下半部之间加锁">在下半部之间加锁</a></li>
+<li><a href="#禁用下半部">禁用下半部</a></li>
+</ul>
+<p>从第七章的学习知道了中断处理程序的特点：</p>
+<ol>
+<li>以异步方式执行，会打断其他重要代码，所以为了避免被打断代码停留时间过长，所以中断处理函数的执行需要快速；</li>
+<li>由于处于中断上下文，所以不可阻塞；</li>
+<li>会关闭中断系统（<strong>设置 IRQF_DISABLED 则屏蔽所有处理器接收任何中断信号的能力，没有设置 IRQF_DISABLED 则对所有处理器屏蔽当前中断所在中断线</strong>）；</li>
+<li>由于中断处理程序往往需要对硬件进行操作，所以他们通常具有更高的时限要求。</li>
+</ol>
+<p>所以中断处理程序在整个硬件中断处理流程中仅占一部分的原因就比较明显了。<strong>操作系统必须有一个异步，快速，简单的机制来负责对硬件做出迅速的响应，并完成那些时间要求严格的操作，即对硬件中断做出即时响应，这就是上半部。而把那些其他的，以及对时间要求宽松的操作，就推后到中断系统被激活之后进行，这就是下半部。</strong> </p>
+<h2 id="下半部"><a href="#下半部" class="headerlink" title="下半部"></a>下半部</h2><p>下半部执行的工作就是与中断密切相关，但是又不是中断处理函数所做的事情。<strong>对于中断处理程序而言（上半部），几乎都要通过操作硬件来对中断的到达进行确认，有时还会从硬件拷贝数据。然后剩下的工作就交给了下半部来完成。</strong></p>
+<p>但是并没有明确的规定，究竟什么该放在上半部执行，什么该放在下半部执行。不过有以下几点可以提供参考：</p>
+<ol>
+<li>如果一个任务对时间非常敏感，那么把他放在上半部中断处理程序中执行；</li>
+<li>如果一个任务和硬件有关，那么放在上半部；</li>
+<li>如果一个任务要保证不被别的中断打断（特别是同一个中断线的中断），那么把他放在上半部；</li>
+<li>其他所有任务考虑放在下半部。</li>
+</ol>
+<h3 id="为什么要使用下半部"><a href="#为什么要使用下半部" class="headerlink" title="为什么要使用下半部"></a>为什么要使用下半部</h3><p>主要的原因还是因为屏蔽中断信号。前面已经多次提及，当一个中断处理程序执行的时候，位于中断上下文，如果没有设置 IRQF_DISABLED 则会对所有处理器都屏蔽掉当前中断线，如果设置了 IRQF_DISABLED 则情况更糟，会屏蔽掉所有处理器上的所有中断信号。<strong>综上所述，当一个中断处理程序在执行的时候，总会屏蔽掉一些中断信号，而中断信号又是硬件与系统通信的唯一方式，所以中断处理程序应该尽快退出，恢复处理器接收中断信号的能力，也就是恢复了与硬件通信的能力，这种恢复，速度越快，系统的对硬件的响应性能越好。</strong> </p>
+<p>所以对硬件中断信号的响应分为了上下部，下半部在执行的时候，是恢复了处理器接收中断信号的能力的。</p>
+<p>在 linux 里面，把这种将一部分工作推后的机制都称为 “下半部机制”。目前，有三种方法来实现将工作推后执行：</p>
+<ol>
+<li>软中断（使用较少）</li>
+<li>tasklet（基于软中断实现）</li>
+<li>工作队列</li>
+</ol>
+<h2 id="软中断"><a href="#软中断" class="headerlink" title="软中断"></a>软中断</h2><p>软中断使用较少，但是 tasklet 是基于软中断实现的，所以先讲述软中断，软中断代码位于 <a href="https://github.com/torvalds/linux/blob/master/kernel/softirq.c" target="_blank" rel="noopener">kernel/softirq.c</a></p>
+<p>软中断是在编译期间静态分配的，他不像 tasklet 那样可以动态注册注销。一个软中断由 softirq_action 结构体表示。而软中断向量 softirq_vec 数组有 NR_SOFTIRQS 个 softirq_action 项。每个被注册的软中断都占据该数组的一项。<a href="#L66">NR_SOFTIRQS</a> 是个枚举值，位于枚举结构体最后，用以获取当前注册的软中断数量。</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">//&lt;linux/interrupt.h&gt;</span></span><br><span class="line"><span class="class"><span class="keyword">struct</span> <span class="title">softirq_action</span>&#123;</span></span><br><span class="line">    <span class="keyword">void</span> (*action)(struct softirq_action *);</span><br><span class="line">&#125;;</span><br><span class="line"></span><br><span class="line"><span class="comment">//in kernel/softirq.c</span></span><br><span class="line"><span class="keyword">static</span> <span class="class"><span class="keyword">struct</span> <span class="title">softirq_action</span> <span class="title">softirq_vec</span>[<span class="title">NR_SOFTIRQS</span>];</span></span><br></pre></td></tr></table></figure>
+
+<p>对于 softirq_action 结构体，有一个设计上的小技巧，成员函数指针 action 的新参类型是这个结构体本身，并且当一个软中断处理函数被调用的时候，是按照下面的方式来执行的：</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">your_softirq-&gt;action(your_softirq);</span><br></pre></td></tr></table></figure>
+
+<p>这样的话，以后当 softirq_action 结构有修改的时候，增加了成员，也无需对每一个中断处理函数的调用做修改，只需要在对应的中断处理函数，即 action 函数里面去取数据就行了。这个技巧也可以用在我们自己的代码里面。</p>
+<p><strong>一个软中断不会抢占另一个软中断，他们可以同时在不同的处理器上面运行。其实唯一可以抢占软中断就只有中断处理程序。</strong> </p>
+<h3 id="软中断的执行过程"><a href="#软中断的执行过程" class="headerlink" title="软中断的执行过程"></a>软中断的执行过程</h3><p>如前面所说，软中断是静态分配的，在 <a href="https://github.com/torvalds/linux/blob/master/include/linux/interrupt.h#L508" target="_blank" rel="noopener">linux/interrupt.h</a> 中，分配了如下软中断：</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">enum</span></span><br><span class="line">&#123;</span><br><span class="line">	HI_SOFTIRQ=<span class="number">0</span>,</span><br><span class="line">	TIMER_SOFTIRQ,</span><br><span class="line">	NET_TX_SOFTIRQ,</span><br><span class="line">	NET_RX_SOFTIRQ,</span><br><span class="line">	BLOCK_SOFTIRQ,</span><br><span class="line">	IRQ_POLL_SOFTIRQ,</span><br><span class="line">	TASKLET_SOFTIRQ,</span><br><span class="line">	SCHED_SOFTIRQ,</span><br><span class="line">	HRTIMER_SOFTIRQ, <span class="comment">/* Unused, but kept as tools rely on the</span></span><br><span class="line"><span class="comment">			    numbering. Sigh! */</span></span><br><span class="line">	RCU_SOFTIRQ,    <span class="comment">/* Preferable RCU should always be the last softirq */</span></span><br><span class="line"></span><br><span class="line">	NR_SOFTIRQS</span><br><span class="line">&#125;;</span><br></pre></td></tr></table></figure>
+
+<table>
+<thead>
+<tr>
+<th>软中断枚举符号</th>
+<th>相对优先级</th>
+<th>软中断描述</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>HI_SOFTIRQ</td>
+<td>0</td>
+<td>优先级高的 tasklets</td>
+</tr>
+<tr>
+<td>TIMER_SOFTIRQ</td>
+<td>1</td>
+<td>系统定时器的下半部</td>
+</tr>
+<tr>
+<td>NET_TX_SOFTIRQ</td>
+<td>2</td>
+<td>发送网络数据包</td>
+</tr>
+<tr>
+<td>NET_RX_SOFTIRQ</td>
+<td>3</td>
+<td>接收网络数据包</td>
+</tr>
+<tr>
+<td>BLOCK_SOFTIRQ</td>
+<td>4</td>
+<td>BLOCK 装置</td>
+</tr>
+<tr>
+<td>IRQ_POLL_SOFTIRQ</td>
+<td>5</td>
+<td></td>
+</tr>
+<tr>
+<td>TASKLET_SOFTIRQ</td>
+<td>6</td>
+<td>正常优先级的 tasklets</td>
+</tr>
+<tr>
+<td>SCHED_SOFTIRQ</td>
+<td>7</td>
+<td>调度程序</td>
+</tr>
+<tr>
+<td>HRTIMER_SOFTIRQ</td>
+<td>8</td>
+<td>高分辨率定时器</td>
+</tr>
+<tr>
+<td>RCU_SOFTIRQ</td>
+<td>0</td>
+<td>RCU 锁定</td>
+</tr>
+</tbody></table>
+<p>最后的 NR_SOFTIRQS 也是前面所提到，用于声明 softirq_vec 数组长度。</p>
+<p>当你要往系统中添加一个软中断，</p>
+<ol>
+<li><p>首先应该在这个枚举结构体里面声明你的软中断。</p>
+</li>
+<li><p>然后编写类型为 <code>void softirq_handler(struct softirq_action *)</code> 的软中断处理函数。</p>
+</li>
+<li><p>调用函数 <code>open_softirq(NET_TX_SOFTIRQ,net_tx_action);</code> 来注册你自己的软中断，绑定软中断处理函数，这里是用发送网络数据包的软中断注册来举例。</p>
+</li>
+<li><p>（可以先看第五条再来看这条）在想要后面执行软中断处理函数的地方，用函数 <code>raise_softirq(NET_TX_SOFTIRQ);</code> 来挂起软中断信号，此后合适的时机软中断处理函数会被调用执行。</p>
+</li>
+<li><p>软中断在被挂起之后，会在以下三个场景被检查调用软中断处理函数：</p>
+<ul>
+<li>从一个硬件代码中断处返回</li>
+<li>在 ksoftirqd 内核线程中</li>
+<li>在那些显式检查和执行待处理软中断的代码中</li>
+</ul>
+</li>
+</ol>
+<p>其中，第五点，不论是在三种方式中以哪种方式检查执行，都会调用函数 <code>do_softirq()</code> ，该函数核心代码如下：</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br></pre></td><td class="code"><pre><span class="line">do_softirq()&#123;</span><br><span class="line">    ...</span><br><span class="line">    u32 pending;</span><br><span class="line">    <span class="comment">/*拷贝当前挂起的软中断*/</span></span><br><span class="line">    pending = local_softirq_pending();</span><br><span class="line">    <span class="keyword">if</span>(pending)&#123;</span><br><span class="line">        <span class="class"><span class="keyword">struct</span> <span class="title">softirq_action</span> *<span class="title">h</span>;</span></span><br><span class="line">        <span class="comment">/*重置软中断挂起位图*/</span></span><br><span class="line">        set_softirq_pending(<span class="number">0</span>);</span><br><span class="line">        h = softirq_vec;</span><br><span class="line">        <span class="keyword">do</span>&#123;</span><br><span class="line">            <span class="keyword">if</span>(pending &amp; <span class="number">1</span>)&#123;</span><br><span class="line">                h-&gt;action(h);</span><br><span class="line">            &#125;</span><br><span class="line">            h++;</span><br><span class="line">            pending &gt;&gt;= <span class="number">1</span>;</span><br><span class="line">        &#125;<span class="keyword">while</span>(pending);</span><br><span class="line">    &#125;</span><br><span class="line">    ...</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>从上述代码可以看出，系统记录了软中断的挂起，结合前面提到的函数 <code>raise_softirq()</code> ，raise_softirq() 这个函数就是将对应位置 1，然后由 do_softirq() 来负责检查执行并清空记录。<strong>上面代码，省略了屏蔽硬件中断和恢复硬件中断的过程。因为在拷贝到清零之间，若是有硬件触发了中断导致某些软中断被挂起，那么这里直接清零是错误的。</strong> 完成挂起位图的相关操作之后，就是依次检查所有的软中断，看是否有软中断挂起，挂起则调用其软中断处理函数。这里的相对优先级就是检查的顺序，序号越小越先被执行。</p>
+<p>一个简单的使用例子，在网卡的中断处理函数里面，会把网络相关的软中断挂起，然后中断处理函数就退出了，上半部执行结束。从上面看出，当中断处理函数退出的时候，会检查软中断，这个时候就会执行软中断处理函数，这就是网络相关中断的下半部。</p>
+<p>清楚了整个流程之后，可以知道，软中断处理函数执行的时候，是可以响应中断的，并且可以对软中断位图进行设置，也正是因为可以对软中断位图进行设置，所以 do_softirq() 是不能休眠的，否则就会漏执行软中断处理函数。</p>
+<p>还有一些应该值得注意的点：<strong>当一个软中断处理程序在执行的时候，当前处理器上的软中断被禁止，但是其他处理器仍然可以执行 do_softirq()，所以对于软中断处理程序内部使用的静态变量，或者是共享数据，都应该要有锁机来保证同步。</strong> </p>
+<p>在中断处理函数中触发软中断是最常见的形式，中断处理函数中将要执行的软中断挂起，然后退出中断处理函数。从中断处理函数返回之后会立马执行 do_softirq() ，就开始执行中断的下半部。</p>
+<h2 id="tasklet"><a href="#tasklet" class="headerlink" title="tasklet"></a>tasklet</h2><p>tasklet 是利用软中断实现的一种下半部机制，他与进程没有任何关系。<strong>tasklet 的接口更简单，锁保护要求也更低。</strong> </p>
+<h3 id="tasklet-的实现"><a href="#tasklet-的实现" class="headerlink" title="tasklet 的实现"></a>tasklet 的实现</h3><p>因为 tasklet 是利用软中断实现的，所以其实他们本身也就是软中断。如前面所说，有两个软中断是跟 tasklet 相关，HI_SOFTIRQ 和 TASKLET_SOFTIRQ，区别只在于相对优先级。</p>
+<p>tasklet 由 tasklet_struct 结构体表示，一个 tasklet_struct 结构体对象就是一个单独的 tasklet。</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="class"><span class="keyword">struct</span> <span class="title">tasklet_struct</span>&#123;</span></span><br><span class="line">    <span class="class"><span class="keyword">struct</span> <span class="title">tasklet_struct</span> *<span class="title">next</span>;</span>    <span class="comment">/* 链表中的下一个 tasklet */</span></span><br><span class="line">    <span class="keyword">unsigned</span> <span class="keyword">long</span> state;            <span class="comment">/* tasklet 的状态 */</span></span><br><span class="line">    <span class="keyword">atomic_t</span> count;                 <span class="comment">/* 引用计数器 */</span></span><br><span class="line">    <span class="keyword">void</span> (*func)(<span class="keyword">unsigned</span> <span class="keyword">long</span>);    <span class="comment">/* tasklet 处理函数 */</span></span><br><span class="line">    <span class="keyword">unsigned</span> <span class="keyword">long</span> data;             <span class="comment">/* 给处理函数的参数 */</span></span><br><span class="line">&#125;;</span><br></pre></td></tr></table></figure>
+
+<p>func 就是 tasklet 的处理程序，就相当于是软中断中的 action，data 成员是 func 的唯一参数。</p>
+<p>state 成员只能在 0、TASKLET_STATE_SCHED、TASKLET_STATE_RUN 之间取值。TASKLET_STATE_SCHED 状态相当于软中断执行了 raise_softirq() 之后的状态，等待被执行。而 TASKLET_STATE_RUN 状态就是其字面意思，正在运行中，别的处理器再检查 tasklet 状态的时候，如果是正在运行，那么就跳过该 tasklet 转而执行下一个，所以同一个 tasklet 不能在不同的处理器上同时运行，原因就在这里，这也是 tasklet 比软中断对锁的要求低的原因，因为同一个 tasklet 是不能同时执行的。</p>
+<p>count 成员是 tasklet 的引用计数器。如果不为零，则表示 tasklet 被禁止，不允许执行；如果为 0 ，tasklet 才是被激活的，在激活状态下，如果还处于 TASKLET_STATE_SCHED 状态，那么这个 tasklet 就可以在合适的时候执行处理函数 func。</p>
+<h3 id="设置-tasklet-为调度态"><a href="#设置-tasklet-为调度态" class="headerlink" title="设置 tasklet 为调度态"></a>设置 tasklet 为调度态</h3><figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">static</span> <span class="keyword">inline</span> <span class="keyword">void</span> <span class="title">tasklet_schedule</span><span class="params">(struct tasklet_struct *t)</span></span></span><br><span class="line"><span class="function"></span>&#123;</span><br><span class="line">	<span class="keyword">if</span> (!test_and_set_bit(TASKLET_STATE_SCHED, &amp;t-&gt;state))</span><br><span class="line">		__tasklet_schedule(t);</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">static</span> <span class="keyword">inline</span> <span class="keyword">void</span> <span class="title">tasklet_hi_schedule</span><span class="params">(struct tasklet_struct *t)</span></span></span><br><span class="line"><span class="function"></span>&#123;</span><br><span class="line">	<span class="keyword">if</span> (!test_and_set_bit(TASKLET_STATE_SCHED, &amp;t-&gt;state))</span><br><span class="line">		__tasklet_hi_schedule(t);</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="keyword">void</span> __tasklet_schedule(struct tasklet_struct *t)</span><br><span class="line">&#123;</span><br><span class="line">	__tasklet_schedule_common(t, &amp;tasklet_vec,</span><br><span class="line">				  TASKLET_SOFTIRQ);</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="keyword">void</span> __tasklet_hi_schedule(struct tasklet_struct *t)</span><br><span class="line">&#123;</span><br><span class="line">	__tasklet_schedule_common(t, &amp;tasklet_hi_vec,</span><br><span class="line">				  HI_SOFTIRQ);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>首先一点，上述的 tasklet_schedule() 和 tasklet_hi_schedule() 都是会在中断处理函数里面被调用，而这两个函数的作用就是把对应的 tasklet_struct 结构类型的参数加入到相关的 tasklet 链表队列里面，并且挂起软中断，等中断处理程序退出之后，就会执行软中断对应的处理函数，而 tasklet 软中断的处理函数就是检查 tasklet 链表中的每一个 tasklet_struct 对象，是否可执行，可以的话就执行，否则跳到下一个继续检查执行。</p>
+<p><code>tasklet_schedule()</code> 的具体流程如下：</p>
+<ol>
+<li>检查参数指定的 tasklet_struct 是否已经是被调度了，如果是，直接退出函数。这种情况一般出现在前面该 tasklet 已经执行了一次 tasklet_schedule() 函数，但是还没有来得及执行，就又调用了一次 tasklet_schedule()。</li>
+<li>进入 __tasklet_schedule，保存中断状态，并且禁用本地中断。这样做是为了在处理 tasklet_schedule 的时候，没有新的中断产生与之相关的设置与请求，以保证处理器状态的有效。</li>
+<li>把需要被调度的 tasklet ，即参数指定的 tasklet 加入到对应的链表中。</li>
+<li>挂起 TASKLET_SOFTIRQ 信号，以便中断返回的时候执行的 do_softirq() 。</li>
+<li>恢复中断状态，返回。</li>
+</ol>
+<p>上面的 tasklet_schedule 可以是 tasklet_hi_schedule，TASKLET_SOFTIRQ 软中断相应的就是该替换为 HI_SOFTIRQ 软中断。</p>
+<p>TASKLET_SOFTIRQ（HI_SOFTIRQ） 的软中断处理函数 <code>tasklet_action()</code> (<code>tasklet_hi_action()</code>) 具体流程如下：</p>
+<ol>
+<li>禁止中断，为当前处理器检查 tasklet_vec 链表。</li>
+<li>将链表从 tasklet_vec 表头上摘取下来，然后将 tasklet_vec 置为 NULL 以清空 tasklet_vec 链表。</li>
+<li>打开中断。</li>
+<li>循环遍历摘取下来的链表上的每一个 tasklet_struct。</li>
+<li>如果是多处理器，通过检查 state 成员状态是否是 TASKLET_STATE_RUN，来判断当前的 tasklet 是否在别的处理器上被执行，如果是则跳到下一个 tasklet。</li>
+<li>如果当前 tasklet 没有执行，那么设置其状态为 TASKLET_STATE_RUN。</li>
+<li>检查 count 成员是否为 0，确保该 tasklet 没有被禁止，如果当前 tasklet 被禁止，那么就跳到下一个 tasklet 执行。</li>
+<li>确定当前状态不是 TASKLET_STATE_RUN，count 是 0，执行该 tasklet 绑定注册的处理函数。</li>
+<li>tasklet 执行完成之后，将 state 清零。</li>
+<li>继续下一个 tasklet，直至没有待处理 tasklet。</li>
+</ol>
+<p><strong>第一步和第三步关于中断的操作，因为这个程序一定是运行的在软中断的处理函数里面，所以在这个状态下，处理器是应该接收所有的中断的，也就是在这个状态下，禁止中断之前，处理器也是会处理所有中断，故而这里就直接是禁用全部中断以及打开全部中断，而不是保存中断状态再恢复。</strong> </p>
+<h3 id="使用-tasklet"><a href="#使用-tasklet" class="headerlink" title="使用 tasklet"></a>使用 tasklet</h3><ol>
+<li><p>编写 tasklet 处理函数。  </p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">//tasklet处理函数原型</span></span><br><span class="line"><span class="keyword">void</span> (*tasklet_handler)(<span class="keyword">unsigned</span> <span class="keyword">long</span> data);</span><br></pre></td></tr></table></figure>
+
+<p>有关 tasklet 处理函数的注意事项：  </p>
+<ul>
+<li>因为 tasklet 是用软中断实现的，所以 tasklet 不能睡眠，也就意味着不能在 tasklet 里面使用信号量或其他可能导致阻塞的函数。</li>
+<li>tasklet 运行时，允许中断，所以如果有共享数据，应该注意加锁保护。</li>
+</ul>
+</li>
+<li><p>声明自己的 tasklet 。<br>可以静态创建，也可以动态创建。对于静态创建而言，有两个宏可以使用：<code>DECLARE_TASKLET(name,func,data)</code> 和 <code>DECLARE_TASKLET_DISABLED(name,func,data)</code>，这两个宏的区别在于对成员 count 的初值设置不同，其中 disabled 设置的 count 初值为 1，是禁止状态。  </p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><span class="line">DECLARE_TASKLET(my_tasklet,my_tasklet_handler,dev);</span><br><span class="line"><span class="comment">//上面的静态创建相当于执行了下面的语句</span></span><br><span class="line"><span class="class"><span class="keyword">struct</span> <span class="title">tasklet_struct</span> <span class="title">my_tasklet</span> = &#123;</span><span class="literal">NULL</span>,<span class="number">0</span>,ATOMIC_INIT(<span class="number">0</span>),my_tasklet_handler,dev&#125;;</span><br><span class="line"></span><br><span class="line"><span class="comment">//动态创建一个 tasklet，是在分配一个 tasklet_struct 内存之后调用 tasklet_init()</span></span><br><span class="line"><span class="function"><span class="keyword">void</span> <span class="title">tasklet_init</span><span class="params">(struct tasklet_struct *t,<span class="keyword">void</span> (*func)(<span class="keyword">unsigned</span> <span class="keyword">long</span>), <span class="keyword">unsigned</span> <span class="keyword">long</span> data)</span></span></span><br><span class="line"><span class="function"></span>&#123;</span><br><span class="line">    t-&gt;next = <span class="literal">NULL</span>;</span><br><span class="line">    t-&gt;state = <span class="number">0</span>;</span><br><span class="line">    atomic_set(&amp;t-&gt;count, <span class="number">0</span>);</span><br><span class="line">    t-&gt;func = func;</span><br><span class="line">    t-&gt;data = data;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+</li>
+<li><p>调度这个自己的 tasklet 。<br>调度方式就是使用前面一小节所提到的 tasklet_schedule()，在中断处理函数中使用这个函数。</p>
+</li>
+</ol>
+<p>此外还有一些跟 tasklet 相关的函数：</p>
+<table>
+<thead>
+<tr>
+<th>函数名</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>tasklet_disable(&amp;my_tasklet);</td>
+<td>通过将 count 原子变量递增 ++ 来禁止 my_tasklet</td>
+</tr>
+<tr>
+<td>tasklet_enable(&amp;my_tasklet);</td>
+<td>通过将 count 原子变量递减 – 来试图允许 my_tasklet(这里说试图是因为判断一个 tasklet 是否被禁止是判断 count 是否等于 0)</td>
+</tr>
+<tr>
+<td>tasklet_kill(&amp;my_tasklet);</td>
+<td>从挂起的队列中去掉这个 tasklet。不过不影响其他地方重新调度该 tasklet</td>
+</tr>
+</tbody></table>
+<h3 id="ksoftirqd-内核线程"><a href="#ksoftirqd-内核线程" class="headerlink" title="ksoftirqd 内核线程"></a>ksoftirqd 内核线程</h3><p>因为 tasklet 是通过软中断来实现，所以下面讨论的关于软中断，同样适用于 tasklet。</p>
+<p>往往，软中断都是在中断处理函数中被挂起，然后中断处理函数返回之后，软中断开始检测执行。而且，有的软中断还会挂起其本身，所以系统中是有可能一直存在软中断待执行的。</p>
+<p>当系统中存在了大量的软中断，如果一直在处理他们，那么用户态程序就可能处于饥饿状态；如果响应第一次软中断的挂起，而对自己再次挂起的软中断留待第二次中断到来的时候再处理，那么对于一个空闲的系统来说，自己再次挂起的软中断会处于饥饿状态。</p>
+<p>为了平衡上述的两种情况，内核有一个线程 ksoftirqd 来负责辅助处理。对于重新触发的软中断，系统不会立即处理，并且当系统中有大量软中断出现的时候，内核会唤醒 ksoftirqd 来处理这些负载。ksoftirqd 的 nice 值是 19，是一个低优先级的线程，以此来避免他跟重要任务争夺资源。这样，软中断就一定能够得到处理，并且用户程序也不会处于饥饿状态。</p>
+<p>每个处理器都有一个这样的内核线程，名为 ksoftirqd/n，其中的 n 在多处理器上就是对不同处理器的编号。一旦该线程被初始化，他就会执行类似下面的死循环：</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">for</span>(;;)&#123;</span><br><span class="line">    <span class="keyword">if</span>(!softirq_pending(cpu))</span><br><span class="line">        schedule();</span><br><span class="line">    set_current_state(TASK_RUNNING);</span><br><span class="line">    </span><br><span class="line">    <span class="keyword">while</span>(softirq_pending(cpu))&#123;</span><br><span class="line">        do_softirq();</span><br><span class="line">        <span class="keyword">if</span>(need_resched())</span><br><span class="line">            schedule();</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    set_current_state(TASK_INTERRUPTIBLE);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>只要 do_softirq() 发现已经执行过的内核线程重新触发了他自己，软中断内核线程 ksoftirqd 就会被唤醒。</p>
+<h2 id="工作队列"><a href="#工作队列" class="headerlink" title="工作队列"></a>工作队列</h2><p>工作队列可以把任务推后，并且交给一个内核线程来执行。这个下半部总是运行在进程上下文中，这样，通过工作队列来实现的下半部就具有进程上下文的优势，可以睡眠并且允许被重新调度。</p>
+<p>在工作队列和 tasklet 中选择使用哪个是比较容易的，如果任务需要睡眠或者重新被调度，那就选择工作队列；如果推后执行的工作不需要睡眠，那么可以选择软中断或者是 tasklet。</p>
+<p><strong>工作队列是唯一一个可以运行在进程上下文的下半部机制，也只有他在下半部机制中是可以睡眠的。</strong> </p>
+<h3 id="工作队列的使用"><a href="#工作队列的使用" class="headerlink" title="工作队列的使用"></a>工作队列的使用</h3><p>首先说明一下创建的工作的类型：</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line"><span class="class"><span class="keyword">struct</span> <span class="title">work_struct</span> &#123;</span></span><br><span class="line">	<span class="keyword">atomic_long_t</span> data;</span><br><span class="line">	<span class="class"><span class="keyword">struct</span> <span class="title">list_head</span> <span class="title">entry</span>;</span></span><br><span class="line">	<span class="keyword">work_func_t</span> func;</span><br><span class="line"><span class="meta">#<span class="meta-keyword">ifdef</span> CONFIG_LOCKDEP</span></span><br><span class="line">	<span class="class"><span class="keyword">struct</span> <span class="title">lockdep_map</span> <span class="title">lockdep_map</span>;</span></span><br><span class="line"><span class="meta">#<span class="meta-keyword">endif</span></span></span><br><span class="line">&#125;;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">typedef</span> <span class="title">void</span> <span class="params">(*<span class="keyword">work_func_t</span>)</span><span class="params">(struct work_struct *work)</span></span>;</span><br></pre></td></tr></table></figure>
+
+<p>实际上上述的类型目前是作为类型 struct worker 的一个成员，现在的工作者是用 worker 来描述。</p>
+<ol>
+<li><p><strong>编写工作队列中一个工作的处理函数</strong><br>函数原型是：  </p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">void</span> <span class="title">work_handler</span><span class="params">(struct work_struct *work)</span></span>;</span><br></pre></td></tr></table></figure>
+
+
+</li>
+</ol>
+<p>   这个函数会由一个工作者线程执行，所以函数会运行与进程上下文。默认情况下是允许中断响应，函数可以睡眠，可以使用锁机制。</p>
+<ol start="2">
+<li><p><strong>创建推后的工作对象：</strong>  </p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br></pre></td><td class="code"><pre><span class="line">  <span class="meta">#<span class="meta-keyword">define</span> DECLARE_WORK(n, f)               \</span></span><br><span class="line">       <span class="class"><span class="keyword">struct</span> <span class="title">work_struct</span> <span class="title">n</span> = __<span class="title">WORK_INITIALIZER</span>(<span class="title">n</span>, <span class="title">f</span>)</span></span><br><span class="line"><span class="class"></span></span><br><span class="line"><span class="class">  #<span class="title">define</span> __<span class="title">WORK_INITIALIZER</span>(<span class="title">n</span>, <span class="title">f</span>) &#123;</span>       \</span><br><span class="line">.data = WORK_DATA_STATIC_INIT(),        \</span><br><span class="line">.entry	= &#123; &amp;(n).entry, &amp;(n).entry &#125;,   \</span><br><span class="line">.func = (f),                            \</span><br><span class="line">__WORK_INIT_LOCKDEP_MAP(#n, &amp;(n))       \</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line">   #define INIT_WORK(_work, _func)         \</span><br><span class="line">__INIT_WORK((_work), (_func), <span class="number">0</span>)</span><br><span class="line"></span><br><span class="line">   #define __INIT_WORK(_work, _func, _onstack)             \</span><br><span class="line"><span class="keyword">do</span> &#123;                                                    \</span><br><span class="line">	__init_work((_work), _onstack);                     \</span><br><span class="line">	(_work)-&gt;data = (<span class="keyword">atomic_long_t</span>) WORK_DATA_INIT();   \</span><br><span class="line">	INIT_LIST_HEAD(&amp;(_work)-&gt;entry);                    \</span><br><span class="line">	(_work)-&gt;func = (_func);                            \</span><br><span class="line">&#125; <span class="keyword">while</span> (<span class="number">0</span>)</span><br></pre></td></tr></table></figure>
+
+<p>可以使用 <code>DECLARE_WORK(work_name,func)</code> 以及 <code>INIT_WORK(your_work,func)</code> 来创建一个工作对象。</p>
+</li>
+<li><p><strong>对工作进行调度</strong><br>当一个工作被创建好了之后，可以调用函数 <code>schedule_work(&amp;work_name);</code> 来将这个工作加入到缺省的系统工作队列中，当系统的工作队列线程被唤醒的时候，就会执行队列上的工作。如果希望这个工作延迟一定时间之后再执行，可以调用函数 <code>schedule_delayed_work(&amp;work,delay);</code> 来推迟 delay 个时钟节拍，再执行 work 指定的工作。  </p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">static</span> <span class="keyword">inline</span> <span class="keyword">bool</span> <span class="title">schedule_work</span><span class="params">(struct work_struct *work)</span></span></span><br><span class="line"><span class="function"></span>&#123;</span><br><span class="line">    <span class="keyword">return</span> queue_work(system_wq, work);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+</li>
+<li><p><strong>刷新操作</strong><br>调用 <code>void flush_scheduled_work(void);</code> 会等待队列中所有工作对象都被执行了之后才返回。并且，如果队列中有延迟的工作，也会等待延迟时间到达，执行完成之后才返回，而不会取消延迟。<br>不过函数 <code>int cancle_delayed_work(struct work_struct *work);</code> 会取消与指定 work 相关的所有挂起的延迟工作。</p>
+</li>
+<li><p><strong>创建新的工作队列</strong>  </p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">#<span class="meta-keyword">define</span> create_workqueue(name)                           \</span></span><br><span class="line"> alloc_workqueue(<span class="string">"%s"</span>, __WQ_LEGACY | WQ_MEM_RECLAIM, <span class="number">1</span>, (name))</span><br><span class="line"></span><br><span class="line"><span class="function">struct workqueue_struct *<span class="title">alloc_workqueue</span><span class="params">(<span class="keyword">const</span> <span class="keyword">char</span> *fmt,</span></span></span><br><span class="line"><span class="function"><span class="params">		 <span class="keyword">unsigned</span> <span class="keyword">int</span> flags,</span></span></span><br><span class="line"><span class="function"><span class="params">		 <span class="keyword">int</span> max_active, ...)</span></span></span><br></pre></td></tr></table></figure>
+
+<p>从上述代码可以看出，相当于是有一个 <code>struct workqueue_struct *create_workqueue(const char *name)</code> 这样一个函数。这个函数创建一个新的工作者线程，这个线程可以被调度唤醒以执行加入到他的工作队列中的工作，而不是使用系统提供的 system_wq 工作者线程来执行这些工作。从上面的调度的源码可以看出，使用 <code>static inline bool queue_work(struct workqueue_struct *wq, struct work_struct *work)</code> 向指定的工作者线程的工作队列中添加工作，同理，对自己创建的工作者线程，就是通过这个接口来往其工作队列中添加工作的。与之对应的延迟工作的添加，使用 <code>static inline bool queue_delayed_work(struct workqueue_struct *wq, struct delayed_work *dwork, unsigned long delay)</code> 函数来添加一个延迟工作。使用 <code>void flush_workqueue(struct workqueue_struct *wq)</code> 来刷新指定工作者线程上面的工作队列。</p>
+</li>
+</ol>
+<h2 id="下半部机制的选择"><a href="#下半部机制的选择" class="headerlink" title="下半部机制的选择"></a>下半部机制的选择</h2><ol>
+<li>如果有睡眠需求，如果要是可调度实体，那么只能选择工作队列；</li>
+<li>如果没有上述的限制，并且中断次数发生较多（导致多次执行下半部），这时候虽然可以使用工作队列，但是工作队列有进程间切换的开销，相比之下，tasklet 会是一个更好的选择；</li>
+<li>软中断是最麻烦的一种下半部机制，需要在内核源码里面静态添加软中断，但是如果追求性能的提升，也是可以考虑软中断来实现下半部。</li>
+</ol>
+<table>
+<thead>
+<tr>
+<th>下半部</th>
+<th>上下文</th>
+<th>顺序执行保障</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>软中断</td>
+<td>中断上下文</td>
+<td>没有</td>
+</tr>
+<tr>
+<td>tasklet</td>
+<td>中断上下文</td>
+<td>同类型不能同时执行</td>
+</tr>
+<tr>
+<td>工作队列</td>
+<td>进程上下文</td>
+<td>没有，是通过调度器调度</td>
+</tr>
+</tbody></table>
+<h2 id="在下半部之间加锁"><a href="#在下半部之间加锁" class="headerlink" title="在下半部之间加锁"></a>在下半部之间加锁</h2><p>对于软中断和工作队列，他们的执行顺序是不定的，有可能上一次中断退出之后执行了一个下半部，在执行过程中，相同的中断发生，会导致后面又执行相同的下半部，这时候就会有一些同步问题发生。相对而言，在这点上，tasklet 因为不允许相同的 tasklet 同时执行（即使是不同的处理器），所以也就不用担心这个问题。</p>
+<p>然而对于三者，都要关系的就是下半部之间的同步问题，对于一些共享变量，仍然需要合适的加锁机制。</p>
+<ol>
+<li>如果是 <strong>进程上下文</strong> 和 <strong>下半部</strong> 共享数据，在访问数据之前，需要先禁止下半部的处理并得到锁的使用权。这么做是为了本地和 SMP 的保护并且防止死锁的出现。（这里是谁在访问数据之前要禁止下半部书上没说，我暂时还不清楚，只是做个笔记）</li>
+<li>如果是 <strong>中断上下文</strong> 和 <strong>下半部</strong> 共享数据，在访问数据之前，需要先禁止中断并得到锁的使用权。这么做是为了本地和 SMP 的保护并且防止死锁的出现。</li>
+<li>任何在工作队列中共享的数据也需要使用锁机制，需要注意的点和一般内核代码相同。</li>
+</ol>
+<h2 id="禁用下半部"><a href="#禁用下半部" class="headerlink" title="禁用下半部"></a>禁用下半部</h2><p>为了保证共享数据安全，一般的做法是先得到一个锁，然后再禁用下半部的处理。<strong>被禁用的下半部是所有的软中断以及所有的 tasklet</strong>。为什么只禁止软中断和 tasklet 而不禁止工作队列？因为软中断的 tasklet 的执行是异步发生的，他们的执行是在中断返回之后，也就是可能会打断当前正在执行的被保护临界区。而工作队列是通过调度执行，运行在进程上下文，所以不存在这个问题。</p>
+<table>
+<thead>
+<tr>
+<th>函数</th>
+<th>描述</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>void local_bh_disable()</td>
+<td>禁止本地处理器的软中断以及 tasklet 的处理</td>
+</tr>
+<tr>
+<td>void local_bh_enable()</td>
+<td>激活本地处理器的软中断以及 tasklet 的处理</td>
+</tr>
+</tbody></table>
+<p>有一个值得注意的地方，他们可以嵌套调用，多次禁止仍然是保持禁止状态，而激活的次数需要与禁止的次数相同，才会真正激活软中断以及 tasklet。</p>
+
+        </div>
+
+        
+            <section class="post-copyright">
+                
+                    <p class="copyright-item">
+                        <span>Author:</span>
+                        <span>LouisozZ</span>
+                    </p>
+                
+                
+                    <p class="copyright-item">
+                        <span>Permalink:</span>
+                        <span><a href="http://louisozz.github.io/post/2019/linux内核设计与实现/第8章-下半部和推后执行的工作/">http://louisozz.github.io/post/2019/linux内核设计与实现/第8章-下半部和推后执行的工作/</a></span>
+                    </p>
+                
+                
+                    <p class="copyright-item">
+                        <span>License:</span>
+                        <span>Copyright (c) 2019 <a href="http://creativecommons.org/licenses/by-nc/4.0/">CC-BY-NC-4.0</a> LICENSE</span>
+                    </p>
+                
+                
+                     <p class="copyright-item">
+                         <span>Slogan:</span>
+                         <span>Do you believe in <strong>DESTINY<strong>?</strong></strong></span>
+                     </p>
+                
+
+            </section>
+        
+        <section class="post-tags">
+            <div>
+                <span>Tag(s):</span>
+                <span class="tag">
+                    
+                    
+                        <a href="/tags/linux/"># linux</a>
+                    
+                        
+                </span>
+            </div>
+            <div>
+                <a href="javascript:window.history.back();">back</a>
+                <span>· </span>
+                <a href="/">home</a>
+            </div>
+        </section>
+        <section class="post-nav">
+            
+                <a class="prev" rel="prev" href="/post/2019/linux内核设计与实现/第9章-内核同步介绍/">《Linux内核设计与实现》/第9章-内核同步介绍</a>
+            
+            
+            <a class="next" rel="next" href="/post/2019/linux内核设计与实现/第7章-中断和中断处理/">《Linux内核设计与实现》/第7章-中断和中断处理</a>
+            
+        </section>
+
+
+    </article>
+</div>
+
+        </div>
+        <footer id="footer" class="footer">
+    <div class="copyright">
+        <span>© LouisozZ | Powered by <a href="https://hexo.io" target="_blank">Hexo</a> & <a href="https://github.com/Siricee/hexo-theme-Chic" target="_blank">Chic</a></span>
+    </div>
+</footer>
+
+    </div>
+</body>
+</html>

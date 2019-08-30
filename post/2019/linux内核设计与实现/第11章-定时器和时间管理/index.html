@@ -1,0 +1,410 @@
+<!DOCTYPE html>
+<html lang="en">
+<head><meta name="generator" content="Hexo 3.9.0">
+    <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, user-scalable=no, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0">
+<meta http-equiv="X-UA-Compatible" content="ie=edge">
+
+
+
+<title>《Linux内核设计与实现》/第11章-定时器和时间管理 | LouisozZ的博客</title>
+
+
+
+    <link rel="icon" href="/head.png">
+
+
+
+
+    <!-- stylesheets list from _config.yml -->
+    
+    <link rel="stylesheet" href="/css/style.css">
+    
+
+
+
+    <!-- scripts list from _config.yml -->
+    
+    <script src="/js/script.js"></script>
+    
+    <script src="/js/tocbot.min.js"></script>
+    
+
+
+
+    
+    
+        
+    
+
+
+</head>
+<body>
+    <div class="wrapper">
+        <header>
+    <nav class="navbar">
+        <div class="container">
+            <div class="navbar-header header-logo"><a href="/">LouisozZ 的博客</a></div>
+            <div class="menu navbar-right">
+                
+                    <a class="menu-item" href="/archives">Posts</a>
+                
+                    <a class="menu-item" href="/category">Categories</a>
+                
+                    <a class="menu-item" href="/tag">Tags</a>
+                
+                    <a class="menu-item" href="/about">About</a>
+                
+                <input id="switch_default" type="checkbox" class="switch_default">
+                <label for="switch_default" class="toggleBtn"></label>
+            </div>
+
+        </div>
+    </nav>
+
+    
+    <nav class="navbar-mobile" id="nav-mobile">
+        <div class="container">
+            <div class="navbar-header">
+                <div>
+                    <a href="/">LouisozZ 的博客</a><a id="mobile-toggle-theme">·&nbsp;Light</a>
+                </div>
+                <div class="menu-toggle" onclick="mobileBtn()">&#9776; Menu</div>
+            </div>
+            <div class="menu" id="mobile-menu">
+                
+                    <a class="menu-item" href="/archives">Posts</a>
+                
+                    <a class="menu-item" href="/category">Categories</a>
+                
+                    <a class="menu-item" href="/tag">Tags</a>
+                
+                    <a class="menu-item" href="/about">About</a>
+                
+            </div>
+        </div>
+    </nav>
+
+</header>
+<script>
+    var mobileBtn = function f() {
+        var toggleMenu = document.getElementsByClassName("menu-toggle")[0];
+        var mobileMenu = document.getElementById("mobile-menu");
+        if(toggleMenu.classList.contains("active")){
+           toggleMenu.classList.remove("active")
+            mobileMenu.classList.remove("active")
+        }else{
+            toggleMenu.classList.add("active")
+            mobileMenu.classList.add("active")
+        }
+    }
+</script>
+        <div class="main">
+            <div class="container">
+    
+    
+        <div class="post-toc">
+    <div class="tocbot-list">
+    </div>
+    <div class="tocbot-list-menu">
+        <a class="tocbot-toc-expand" onclick="expand_toc()">Expand all</a>
+        <a onclick="go_top()">Back to top</a>
+        <a onclick="go_bottom()">Go to bottom</a>
+    </div>
+</div>
+
+<script>
+    document.ready(
+        function () {
+            tocbot.init({
+                tocSelector: '.tocbot-list',
+                contentSelector: '.post-content',
+                headingSelector: 'h1, h2, h3, h4, h5',
+                collapseDepth: 1,
+                orderedList: false,
+                scrollSmooth: true,
+            })
+        }
+    )
+
+    function expand_toc() {
+        var b = document.querySelector(".tocbot-toc-expand");
+        tocbot.init({
+            tocSelector: '.tocbot-list',
+            contentSelector: '.post-content',
+            headingSelector: 'h1, h2, h3, h4, h5',
+            collapseDepth: 6,
+            orderedList: false,
+            scrollSmooth: true,
+        });
+        b.setAttribute("onclick", "collapse_toc()");
+        b.innerHTML = "Collapse all"
+    }
+
+    function collapse_toc() {
+        var b = document.querySelector(".tocbot-toc-expand");
+        tocbot.init({
+            tocSelector: '.tocbot-list',
+            contentSelector: '.post-content',
+            headingSelector: 'h1, h2, h3, h4, h5',
+            collapseDepth: 1,
+            orderedList: false,
+            scrollSmooth: true,
+        });
+        b.setAttribute("onclick", "expand_toc()");
+        b.innerHTML = "Expand all"
+    }
+
+    function go_top() {
+        window.scrollTo(0, 0);
+    }
+
+    function go_bottom() {
+        window.scrollTo(0, document.body.scrollHeight);
+    }
+
+</script>
+    
+
+    
+    <article class="post-wrap">
+        <header class="post-header">
+            <h1 class="post-title">《Linux内核设计与实现》/第11章-定时器和时间管理</h1>
+            
+                <div class="post-meta">
+                    
+                        Author: <a itemprop="author" rel="author" href="/">LouisozZ</a>
+                    
+
+                    
+                        <span class="post-time">
+                        Date: <a href="#">August 11, 2019&nbsp;&nbsp;11:10:54</a>
+                        </span>
+                    
+                    
+                        <span class="post-category">
+                    Category:
+                            
+                                <a href="/categories/linux内核/">linux内核</a>
+                            
+                        </span>
+                    
+                </div>
+            
+        </header>
+
+        <div class="post-content">
+            <!-- # 第 11 章 &nbsp;&nbsp; 定时器和时间管理 -->
+<!-- TOC -->
+<ul>
+<li><a href="#内核中的时间概念">内核中的时间概念</a></li>
+<li><a href="#hz-节拍率">HZ-节拍率</a></li>
+<li><a href="#jiffies">jiffies</a></li>
+<li><a href="#硬时钟和定时器">硬时钟和定时器</a></li>
+<li><a href="#时钟中断处理程序">时钟中断处理程序</a></li>
+<li><a href="#实际时间墙上时间">实际时间（墙上时间）</a></li>
+<li><a href="#定时器">定时器</a><ul>
+<li><a href="#定时器的竞争">定时器的竞争</a></li>
+<li><a href="#定时器的执行时机">定时器的执行时机</a></li>
+</ul>
+</li>
+<li><a href="#延迟执行">延迟执行</a><ul>
+<li><a href="#忙等待">忙等待</a></li>
+<li><a href="#短延迟">短延迟</a></li>
+<li><a href="#schedule_timeout">schedule_timeout()</a></li>
+</ul>
+</li>
+</ul>
+<p>在进入正题之前，首先来明确一些基本概念：</p>
+<ol>
+<li><strong>相对时间</strong> 与 <strong>绝对时间</strong> ：在计算机里面，相对时间指的是当前运行的系统里面，一个事件相对于另一个事件的间隔时间。例如协议栈中的超时重传，超时时间就是发出一个报文之后，距离这个报文被重传的时间，就是他们的相对时间。而绝对时间，是距离 1970.1.1 00:00:00 到现在的时间。</li>
+<li><strong>系统定时器</strong> 与 <strong>动态定时器</strong> ：系统定时器是一个可编程硬件芯片，他以固定频率产生硬件中断，对应的中断处理函数来更新绝对时间，也负责执行系统周期性的任务。而动态定时器一种软件定时器，由系统定时器（硬件）提供时间基准，然后动态定时器相当于是计时，对那些需要推后执行的事件做倒计时，例如超时重传的超时时间定时。</li>
+</ol>
+<h2 id="内核中的时间概念"><a href="#内核中的时间概念" class="headerlink" title="内核中的时间概念"></a>内核中的时间概念</h2><p>操作系统本身对时间是没有概念的，而是通过系统定时器，也就是那个可编程的硬件芯片，通过它按照固定频率产生中断，以此来记录时间。硬件产生中断的频率也被称为<strong>节拍率</strong>，由于该硬件是可编程的，所以其节拍率对内核是可知的，这样内核就知道两次中断的间隔时间，这个间隔时间就是 <strong>节拍</strong>。</p>
+<p>内核记录了系统运行时间，也就是系统自启动之后的运行时间，应用程序可以通过两次读取运行时间做差来得到流逝的相对时间。</p>
+<h2 id="HZ-节拍率"><a href="#HZ-节拍率" class="headerlink" title="HZ-节拍率"></a>HZ-节拍率</h2><p>HZ 是一个在内核编程的时候可以使用的变量名，代表的就是当前系统定时器的节拍率，即，一秒产生多少个中断。</p>
+<p>由于系统定时器中断处理函数需要做的事情有很多：</p>
+<ol>
+<li>更新系统运行时间；</li>
+<li>更新墙上时间；</li>
+<li>在 SMP 系统上均衡各处理器的运行队列；</li>
+<li>更新检查 current 任务的时间片，如果用完则需要调度；</li>
+<li>运行那些超时了的定时器的处理程序；</li>
+<li>更新资源消耗以及处理器时间的统计值</li>
+</ol>
+<p>这些事情是在每一次中断被触发之后都要做的，而且中断被触发实际上是由硬件发出电信号给处理器，这些都是耗能的。所以对于空闲的时候，如果可以动态调节中断被触发的频率，那么这样的系统在长时间的运行中，可以达到省电的效果，这种就是无节拍 OS。<strong>无节拍系统在空档期不会被不必要的时钟中断所打断，于是减少了系统能耗。</strong> </p>
+<h2 id="jiffies"><a href="#jiffies" class="headerlink" title="jiffies"></a>jiffies</h2><p><strong>全局变量 jiffies</strong> 用来记录自系统启动以来产生的节拍总数，系统启动的时候，内核将该变量初始化为 0。</p>
+<p>jiffies 在内核代码中的定义是：</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">extern</span> <span class="keyword">unsigned</span> <span class="keyword">long</span> <span class="keyword">volatile</span> jiffies;</span><br></pre></td></tr></table></figure>
+
+<p>从定义可以看出，每次读取 jiffies 都是从内存读取。下面是一些使用例程：</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">unsigned</span> <span class="keyword">long</span> current_jiffies = jiffies;    <span class="comment">//current time</span></span><br><span class="line"><span class="keyword">unsigned</span> <span class="keyword">long</span> time_temp = jiffies + <span class="number">1</span>;      <span class="comment">//current time + one tick</span></span><br><span class="line"><span class="keyword">unsigned</span> <span class="keyword">long</span> later = jiffies + <span class="number">5</span>*HZ;       <span class="comment">//5 seconds later</span></span><br></pre></td></tr></table></figure>
+
+<p>jiffies 的变量类型总是无符号长整形，所以在 32 位机器上他是 32 位的，在 64 位机器上他是 64 位的。32 位 jiffies 在 100HZ 的情况下，497天会溢出，在 1000HZ 的情况下，49 天会溢出；而 64 位的 jiffies 溢出时间会很长，是看不到他溢出的。</p>
+<p>因为有上述的溢出情况，所以如果我们直接通过比较当前的 jiffies 值与我们期望的目标时间 jiffies 值来判断时间关系，可能会得到错误的比较结果。内核提供了四个宏来帮助比较节拍数：</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">#<span class="meta-keyword">define</span> time_after(a,b)		\</span></span><br><span class="line">	(typecheck(<span class="keyword">unsigned</span> <span class="keyword">long</span>, a) &amp;&amp; \</span><br><span class="line">	 typecheck(<span class="keyword">unsigned</span> <span class="keyword">long</span>, b) &amp;&amp; \</span><br><span class="line">	 ((<span class="keyword">long</span>)((b) - (a)) &lt; <span class="number">0</span>))</span><br><span class="line"><span class="meta">#<span class="meta-keyword">define</span> time_before(a,b)	time_after(b,a)</span></span><br><span class="line"></span><br><span class="line"><span class="meta">#<span class="meta-keyword">define</span> time_after_eq(a,b)	\</span></span><br><span class="line">	(typecheck(<span class="keyword">unsigned</span> <span class="keyword">long</span>, a) &amp;&amp; \</span><br><span class="line">	 typecheck(<span class="keyword">unsigned</span> <span class="keyword">long</span>, b) &amp;&amp; \</span><br><span class="line">	 ((<span class="keyword">long</span>)((a) - (b)) &gt;= <span class="number">0</span>))</span><br><span class="line"><span class="meta">#<span class="meta-keyword">define</span> time_before_eq(a,b)	time_after_eq(b,a)</span></span><br></pre></td></tr></table></figure>
+
+<p>前面曾提到过 HZ，其实 HZ 是可以通过修改配置来改变的，因为产生时间中断的是一个可编程硬件，在系统初始化的时候，根据配置来初始化这个产生系统定时器中断的时钟源。因为这个 HZ 可以更改，所以内核提供了一个用户可见的频率常量，USER_HZ，用户可以使用 USER_HZ 来计算时间。通过查看现在我手里的 linux 源码，发现：</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">//============ in arch/ia64</span></span><br><span class="line"><span class="meta">#<span class="meta-keyword">define</span> USER_HZ HZ</span></span><br><span class="line"></span><br><span class="line"><span class="comment">//============ in arch/alpha</span></span><br><span class="line"><span class="meta">#<span class="meta-keyword">define</span> USER_HZ 1024</span></span><br><span class="line"></span><br><span class="line"><span class="comment">//============ in include</span></span><br><span class="line"><span class="meta">#<span class="meta-keyword">define</span> USER_HZ 100</span></span><br></pre></td></tr></table></figure>
+
+<p>对不同的体系结构，有不同的 USER_HZ 定义，一般的都是定义成这个常量 100。</p>
+<p>为了应对修改了系统配置 CONFIG_HZ，就可能造成的 HZ != USER_HZ 情况，系统提供了一个接口 <code>jiffies_to_clock_t()</code> 。用一段例程来说明他的作用：</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">unsigned</span> <span class="keyword">long</span> start = jiffies;</span><br><span class="line"><span class="keyword">unsigned</span> <span class="keyword">long</span> kernel_total_time;    <span class="comment">//表示内核看到的节拍数</span></span><br><span class="line"><span class="keyword">unsigned</span> <span class="keyword">long</span> user_total_time;      <span class="comment">//表示用户看到的节拍数</span></span><br><span class="line"></span><br><span class="line"><span class="comment">// after some task</span></span><br><span class="line">...</span><br><span class="line">kernel_total_time = jiffies - start;</span><br><span class="line"><span class="comment">//现在得到的 total_time 是以 HZ 为节拍率的节拍数</span></span><br><span class="line"><span class="comment">//如果 HZ == USER_HZ ,那么 user_total_time = kernel_total_time</span></span><br><span class="line"><span class="comment">//但是如果 HZ 经过了修改，USER_HZ 就不等于 HZ，所以就不能用 kernel_total_time 来给 user_total_time 赋值</span></span><br><span class="line"><span class="comment">//这就是jiffies_to_clock_t() 的作用，将节拍数转换为以 USER_HZ 为节拍率的节拍数</span></span><br><span class="line">user_total_time = <span class="keyword">jiffies_to_clock_t</span>(kernel_total_time);</span><br><span class="line">printk(<span class="string">"using %d seconds."</span>,user_total_time/USER_HZ);</span><br></pre></td></tr></table></figure>
+
+<h2 id="硬时钟和定时器"><a href="#硬时钟和定时器" class="headerlink" title="硬时钟和定时器"></a>硬时钟和定时器</h2><p>实时时钟 RTC(Real Time Clock) 是用来持久存放系统时间的设备，系统关闭之后，靠主板上的电池来提供电力保持系统计时。</p>
+<p>当系统启动的时候，内核通过读取 RTC 来初始化墙上时间，这个墙上时间在系统里面就是变量 xtime。</p>
+<p>系统定时器的硬件触发源，在不同体系结构上有不同的实现方式，如：</p>
+<ul>
+<li>通过对电子晶振分频</li>
+<li>衰减测量器（设初值，初值以固定频率递减，减至 0 触发中断）</li>
+<li>可编程中断时钟（PIT)</li>
+</ul>
+<p>上述的实现方式虽然不同，但是都是会以固定的频率触发中断，以此来给系统提供基准时钟，通过在时钟中断处理函数中执行相关动作来管理系统的时钟。</p>
+<h2 id="时钟中断处理程序"><a href="#时钟中断处理程序" class="headerlink" title="时钟中断处理程序"></a>时钟中断处理程序</h2><p>时钟中断处理程序分为两部分，<strong>体系结构相关</strong> 和 <strong>体系结构无关</strong> 。</p>
+<p>体系结构相关部分作为系统定时器的中断处理程序被注册到内核中。虽然中断处理程序的具体工作根据不同体系结构有不同的工作，但是绝大多数的系统时钟中断处理程序都要完成：</p>
+<ol>
+<li>获得 xtime_lock 锁，以便对访问 jiffies_64 和墙上时间 xtime 进行保护；</li>
+<li>需要时应答或重新设置系统时钟；</li>
+<li>周期性的使用墙上时间更新实时时钟（用 xtime 变量更新实时时钟硬件寄存器）；</li>
+<li><strong>调用体系结构无关的程序 tick_periodic()</strong>。</li>
+</ol>
+<p>通过调用与体系结构无关的 tick_periodic() 来完成更多的工作：</p>
+<ol>
+<li><strong>把变量 jiffies_64 增加 1</strong>，do_timer();</li>
+<li>（进入函数update_process_times()）<strong>更新资源消耗的统计值</strong>，如当前系统消耗的系统时间和用户时间，account_process_tick();</li>
+<li><strong>执行已到期的动态定时器</strong>，run_local_timers(); 这个函数标记软中断，后半部执行已到期动态定时器；</li>
+<li><strong>调用 scheduler_tick() 函数</strong>，减少当前进程时间片计数值，在需要时设置 need_resched 标志，如果是在 SMP 机器上，还要负责平衡每个处理器的运行队列；</li>
+<li><strong>更新墙上时间，即，更新 xtime</strong>；</li>
+<li><strong>计算平均负载值</strong>。</li>
+</ol>
+<p>上述工作执行完成之后，退出 tick_periodic()，释放 xtime_lock 锁，然后退出。</p>
+<p>对于更新系统资源消耗的统计，是一个大概值，并非是准确值。在调用的系统无关函数 tick_periodic() 里面，实际是以这样的形式来调用 update_process_times(user_mode(get_irq_regs())); 其中的 <code>user_mode(get_irq_regs())</code> 整体是从系统寄存器里面得知当前是处于系统态还是用户态，然后将从上次中断到这次中断中间的时间（一个 tick），都算作是当前得到状态的时间。举个例子，当前的状态为用户态，这个时候系统时钟中断触发，虽然前一次中断到这次中断期间，多次进行了系统调用，不过这个 tick 的时间还是算作是用户态时间。</p>
+<h2 id="实际时间（墙上时间）"><a href="#实际时间（墙上时间）" class="headerlink" title="实际时间（墙上时间）"></a>实际时间（墙上时间）</h2><p>如上面所述，这个时间的值存放在 xtime 变量中，这个变量是一个 timespace 类型的变量，xtime.tv_sec 值表示从 1970.1.1 到现在经过的秒数，xtime.tv_nsec 表示从上一秒到现在所经过的纳秒数。</p>
+<p>读写 xtime 时候需要获取和释放的锁 xtime_lock 是一个顺序锁，读写例程如下：</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">//==============更新 xtime</span></span><br><span class="line">write_seqlock(&amp;xtime_lock);</span><br><span class="line"><span class="comment">/* add xtime */</span></span><br><span class="line">write_sequnlock(&amp;xtime_lock);</span><br><span class="line"></span><br><span class="line"><span class="comment">//==============读 xtime</span></span><br><span class="line"><span class="keyword">unsigned</span> <span class="keyword">long</span> seq;</span><br><span class="line"><span class="keyword">do</span>&#123;</span><br><span class="line">	seq = read_begin(&amp;xtime_lock);</span><br><span class="line">	<span class="comment">/* 读取 xtime 值 */</span></span><br><span class="line">&#125;<span class="keyword">while</span>(read_seqretry(&amp;xtime_lock,seq));</span><br></pre></td></tr></table></figure>
+
+<p>在用户空间取得墙上时间的接口是 <code>gettimeofday()</code>，在内核中对应的系统调用是 <code>sys_gettimeofday(struct timeval *tv,struct timezone *tz)</code> 如果第一个参数不为 NULL，那么函数将当前墙上时间保存在该指针指向的变量中；如果接收时区的参数 tz 为空，那么该函数就将时区作为返回值返回给用户；如果参数都非空，且执行正确，返回 0；如果在给用户空间拷贝墙上时间或者时区的时候发生了错误，那么返回 -EFAULT。</p>
+<h2 id="定时器"><a href="#定时器" class="headerlink" title="定时器"></a>定时器</h2><p>内核提供了动态定时器的结构以及操作接口方便管理动态定时器。</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">//=======2.6 版本 timer_list</span></span><br><span class="line"><span class="class"><span class="keyword">struct</span> <span class="title">timer_list</span>&#123;</span></span><br><span class="line">	<span class="class"><span class="keyword">struct</span> <span class="title">list_head</span> <span class="title">entry</span>;</span>				<span class="comment">//定时器链表入口</span></span><br><span class="line">	<span class="keyword">unsigned</span> <span class="keyword">long</span> expires;				<span class="comment">//以 jiffies 为单位的定时值</span></span><br><span class="line">	<span class="keyword">void</span> (*function)(<span class="keyword">unsigned</span> <span class="keyword">long</span>);	<span class="comment">//定时器处理函数</span></span><br><span class="line">	<span class="keyword">unsigned</span> <span class="keyword">long</span> data;					<span class="comment">//处理函数参数</span></span><br><span class="line">	<span class="class"><span class="keyword">struct</span> <span class="title">tvec_t_base_s</span> *<span class="title">base</span>;</span>			<span class="comment">//定时器内部值，用户不要使用</span></span><br><span class="line">&#125;;</span><br><span class="line"></span><br><span class="line"><span class="comment">//=======2019年7月29日10:36:01 include/linux/timer.h</span></span><br><span class="line"><span class="class"><span class="keyword">struct</span> <span class="title">timer_list</span> &#123;</span></span><br><span class="line">	<span class="comment">/*</span></span><br><span class="line"><span class="comment">	 * All fields that change during normal runtime grouped to the</span></span><br><span class="line"><span class="comment">	 * same cacheline</span></span><br><span class="line"><span class="comment">	 */</span></span><br><span class="line">	<span class="class"><span class="keyword">struct</span> <span class="title">hlist_node</span>	<span class="title">entry</span>;</span></span><br><span class="line">	<span class="keyword">unsigned</span> <span class="keyword">long</span>		expires;</span><br><span class="line">	<span class="keyword">void</span>			(*function)(struct timer_list *);</span><br><span class="line">	u32			flags;</span><br><span class="line"></span><br><span class="line"><span class="meta">#<span class="meta-keyword">ifdef</span> CONFIG_LOCKDEP</span></span><br><span class="line">	<span class="class"><span class="keyword">struct</span> <span class="title">lockdep_map</span>	<span class="title">lockdep_map</span>;</span></span><br><span class="line"><span class="meta">#<span class="meta-keyword">endif</span></span></span><br><span class="line">&#125;;</span><br></pre></td></tr></table></figure>
+
+<p>timer_list 的结构已经发生了变化，定时值仍然是 <strong>expires</strong> ，定时器处理函数 function 的参数已经变成了整个结构体本身，这个编程技巧之前曾提过，是为了方便之后的扩展。</p>
+<p>使用内核提供的定时器有以下步骤：</p>
+<ol>
+<li>声明一个 timer_list 对象；</li>
+<li>注册回调函数，timer_setup(&amp;timer,callback,flags)；</li>
+<li>设置超时绝对时间，以 jiffies 为单位，your_timer-&gt;expires = jiffies + x；</li>
+<li>启动定时器，add_timer(&amp;your_timer)；</li>
+<li>修改并启动定时器，mod_timer(&amp;your_timer,newjiffies)；</li>
+<li>可选的提前删除定时器，del_timer(&amp;your_timer);</li>
+</ol>
+<p>在 timer 中涉及到的 flags 参数一般都是传 0。其中回调函数的注册是使用 <code>timer_setup()</code> ，而定时时间的设定通过直接赋值。</p>
+<p>修改定时器时间的函数 <code>mod_timer()</code> 实际上是修改及启动，无论之前指定的定时器是否已经启动，调用该函数之后，定时器都将以新的定时时间启动起来。</p>
+<p>使用 <code>add_timer()</code> 以及 <code>mod_timer()</code> 所启动的定时器，都是只执行一次回调函数调用，调用之后自动销毁，如果需要再次启动，应该在回调函数中重新 <code>add_timer()</code>。</p>
+<h3 id="定时器的竞争"><a href="#定时器的竞争" class="headerlink" title="定时器的竞争"></a>定时器的竞争</h3><p>在多处理器上，可能当你在一个处理器上执行 del_timer() 函数的时候，另一个处理器正在执行它的回调函数，并且之后他们都会访问一个共享变量，那么这时候就产生了同步问题。</p>
+<p>所以一般应该使用 <code>del_timer_sync()</code> 来删除定时器，这个同步版本的删除函数，会等待在别的处理器上该定时器的处理函数退出之后才返回，所以可能等待，因此就不能用于中断上下文中。</p>
+<h3 id="定时器的执行时机"><a href="#定时器的执行时机" class="headerlink" title="定时器的执行时机"></a>定时器的执行时机</h3><p>从 <a href="#时钟中断处理程序">时钟中断处理程序</a> 中与体系结构无关代码的第三点中知道，每次系统时钟中断触发之后，会将 TIMER_SOFTIRQ 软中断挂起，系统时钟中断的下半部就会对已超时的定时器调用其回调函数。</p>
+<h2 id="延迟执行"><a href="#延迟执行" class="headerlink" title="延迟执行"></a>延迟执行</h2><p>延迟执行的三种典型方式：</p>
+<ol>
+<li>忙等待</li>
+<li>短延迟</li>
+<li>schedule_timeout()</li>
+</ol>
+<h3 id="忙等待"><a href="#忙等待" class="headerlink" title="忙等待"></a>忙等待</h3><p>该方法用在延迟时间是节拍的整数倍，或者是延迟的精确度要求不高的时候使用：</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">unsigned</span> <span class="keyword">long</span> timeout = jiffies + <span class="number">10</span>;		<span class="comment">//延迟 10 个节拍</span></span><br><span class="line"><span class="keyword">while</span>(time_before(jiffies,timout));</span><br><span class="line"></span><br><span class="line"><span class="keyword">unsigned</span> <span class="keyword">long</span> timeout_2 = jiffies +<span class="number">2</span>*HZ;	<span class="comment">//延迟 2 秒</span></span><br><span class="line"><span class="keyword">while</span>(time_before(jiffies,timeout_2));</span><br></pre></td></tr></table></figure>
+
+<p>上述方法是忙等待，等待期间是没有办法执行其他事情的，这是一种很低效率的办法，对处理器时间有严重的浪费。使用忙等待的更好的方法是在等待期间调度别的程序运行：</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">unsigned</span> <span class="keyword">long</span> timeout_2 = jiffies +<span class="number">2</span>*HZ;	<span class="comment">//延迟 2 秒</span></span><br><span class="line"><span class="keyword">while</span>(time_before(jiffies,timeout_2))</span><br><span class="line">	cond_resched();</span><br></pre></td></tr></table></figure>
+
+<p>当当前系统的 need_resched 被设置的时候，<code>cond_resched()</code> 调度一个新的、更重要的进程投入运行，否则还是忙等待。因为这种方法会调用调度函数，所以不能在中断上下文中使用。</p>
+<p><strong>不管在什么情况下，都不能在中断中，或者持有锁的情况下，进行延迟执行动作。</strong> </p>
+<h3 id="短延迟"><a href="#短延迟" class="headerlink" title="短延迟"></a>短延迟</h3><p>短延迟的原理是，n 条指令执行需要 t 时间，是根据当前体系结构的 MIPS，计算要求延迟时间要执行多少条指令来实现。内核在启动的时候会调用 <code>calibrate_delay()</code> 来计算出一个 jiffy 可以执行多少指令，然后把这个值保存在 loops_per_jiffy 中。</p>
+<p><strong>短延迟出现在要求的延迟时间很短，并且对精度要求较高的使用场景</strong>。</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">void</span> <span class="title">udelay</span><span class="params">(<span class="keyword">unsigned</span> <span class="keyword">long</span> usece)</span></span>;</span><br><span class="line"><span class="function"><span class="keyword">void</span> <span class="title">ndelay</span><span class="params">(<span class="keyword">unsigned</span> <span class="keyword">long</span> nsece)</span></span>;</span><br><span class="line"><span class="function"><span class="keyword">void</span> <span class="title">mdelay</span><span class="params">(<span class="keyword">unsigned</span> <span class="keyword">long</span> msece)</span></span>;</span><br></pre></td></tr></table></figure>
+
+<h3 id="schedule-timeout"><a href="#schedule-timeout" class="headerlink" title="schedule_timeout()"></a>schedule_timeout()</h3><p>使用步骤如下：</p>
+<ol>
+<li>更改当前进程状态为 TASK_INTERRUPTIBLE 或者 TASK_UNINTERRUPTIBLE</li>
+<li>调用 schedule_timeout()，调度新的进程投入运行，并且在指定超时时间到达之后（或者是进程可打断睡眠状态下信号到达），唤醒进程，加入到可执行队列中。</li>
+</ol>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">set_current_state(TASK_INTERRUPTIBLE);</span><br><span class="line">schedule_timeout(<span class="number">2</span>*HZ);</span><br></pre></td></tr></table></figure>
+
+<p>注意，在调用 schedule_timeout() 之前，必须先设置当前进程的状态为 TASK_INTERRUPTIBLE 或者 TASK_UNINTERRUPTIBLE，否则的话，该进程是不会睡眠的。也正是因为调用了 schedule_timeout() 的代码需要保证进程能够睡眠，所以不能在中断上下文中或持有锁的情况下调用该函数。</p>
+<p>schedule_timeout() 的内部实现就是一个动态定时器的应用：</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">signed</span> <span class="keyword">long</span> __<span class="function">sched <span class="title">schedule_timeout</span><span class="params">(<span class="keyword">signed</span> <span class="keyword">long</span> timeout)</span></span></span><br><span class="line"><span class="function"></span>&#123;</span><br><span class="line">	<span class="class"><span class="keyword">struct</span> <span class="title">process_timer</span> <span class="title">timer</span>;</span></span><br><span class="line">	<span class="keyword">unsigned</span> <span class="keyword">long</span> expire;</span><br><span class="line"></span><br><span class="line">	<span class="keyword">switch</span> (timeout)</span><br><span class="line">	&#123;</span><br><span class="line">	<span class="keyword">case</span> MAX_SCHEDULE_TIMEOUT:</span><br><span class="line">		<span class="comment">/*</span></span><br><span class="line"><span class="comment">		 * These two special cases are useful to be comfortable</span></span><br><span class="line"><span class="comment">		 * in the caller. Nothing more. We could take</span></span><br><span class="line"><span class="comment">		 * MAX_SCHEDULE_TIMEOUT from one of the negative value</span></span><br><span class="line"><span class="comment">		 * but I' d like to return a valid offset (&gt;=0) to allow</span></span><br><span class="line"><span class="comment">		 * the caller to do everything it want with the retval.</span></span><br><span class="line"><span class="comment">		 */</span></span><br><span class="line">		schedule();</span><br><span class="line">		<span class="keyword">goto</span> out;</span><br><span class="line">	<span class="keyword">default</span>:</span><br><span class="line">		<span class="comment">/*</span></span><br><span class="line"><span class="comment">		 * Another bit of PARANOID. Note that the retval will be</span></span><br><span class="line"><span class="comment">		 * 0 since no piece of kernel is supposed to do a check</span></span><br><span class="line"><span class="comment">		 * for a negative retval of schedule_timeout() (since it</span></span><br><span class="line"><span class="comment">		 * should never happens anyway). You just have the printk()</span></span><br><span class="line"><span class="comment">		 * that will tell you if something is gone wrong and where.</span></span><br><span class="line"><span class="comment">		 */</span></span><br><span class="line">		<span class="keyword">if</span> (timeout &lt; <span class="number">0</span>) &#123;</span><br><span class="line">			printk(KERN_ERR <span class="string">"schedule_timeout: wrong timeout "</span></span><br><span class="line">				<span class="string">"value %lx\n"</span>, timeout);</span><br><span class="line">			dump_stack();</span><br><span class="line">			current-&gt;state = TASK_RUNNING;</span><br><span class="line">			<span class="keyword">goto</span> out;</span><br><span class="line">		&#125;</span><br><span class="line">	&#125;</span><br><span class="line"></span><br><span class="line">	expire = timeout + jiffies;</span><br><span class="line"></span><br><span class="line">	timer.task = current;</span><br><span class="line">	timer_setup_on_stack(&amp;timer.timer, process_timeout, <span class="number">0</span>);</span><br><span class="line">	__mod_timer(&amp;timer.timer, expire, <span class="number">0</span>);</span><br><span class="line">	schedule();</span><br><span class="line">	del_singleshot_timer_sync(&amp;timer.timer);</span><br><span class="line"></span><br><span class="line">	<span class="comment">/* Remove the timer from the object tracker */</span></span><br><span class="line">	destroy_timer_on_stack(&amp;timer.timer);</span><br><span class="line"></span><br><span class="line">	timeout = expire - jiffies;</span><br><span class="line"></span><br><span class="line"> out:</span><br><span class="line">	<span class="keyword">return</span> timeout &lt; <span class="number">0</span> ? <span class="number">0</span> : timeout;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>从代码里面可以看出，所设置的超时函数是 <code>process_timeout()</code>：</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">static</span> <span class="keyword">void</span> <span class="title">process_timeout</span><span class="params">(struct timer_list *t)</span></span></span><br><span class="line"><span class="function"></span>&#123;</span><br><span class="line">	<span class="class"><span class="keyword">struct</span> <span class="title">process_timer</span> *<span class="title">timeout</span> = <span class="title">from_timer</span>(<span class="title">timeout</span>, <span class="title">t</span>, <span class="title">timer</span>);</span></span><br><span class="line"></span><br><span class="line">	wake_up_process(timeout-&gt;task);</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">int</span> <span class="title">wake_up_process</span><span class="params">(struct task_struct *p)</span></span></span><br><span class="line"><span class="function"></span>&#123;</span><br><span class="line">	<span class="keyword">return</span> try_to_wake_up(p, TASK_NORMAL, <span class="number">0</span>);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p><code>try_to_wake_up()</code> 函数此前在第四章进程调度的时候讲过，会唤醒指定任务，并将其加入到可执行队列中。</p>
+
+        </div>
+
+        
+            <section class="post-copyright">
+                
+                    <p class="copyright-item">
+                        <span>Author:</span>
+                        <span>LouisozZ</span>
+                    </p>
+                
+                
+                    <p class="copyright-item">
+                        <span>Permalink:</span>
+                        <span><a href="http://louisozz.github.io/post/2019/linux内核设计与实现/第11章-定时器和时间管理/">http://louisozz.github.io/post/2019/linux内核设计与实现/第11章-定时器和时间管理/</a></span>
+                    </p>
+                
+                
+                    <p class="copyright-item">
+                        <span>License:</span>
+                        <span>Copyright (c) 2019 <a href="http://creativecommons.org/licenses/by-nc/4.0/">CC-BY-NC-4.0</a> LICENSE</span>
+                    </p>
+                
+                
+                     <p class="copyright-item">
+                         <span>Slogan:</span>
+                         <span>Do you believe in <strong>DESTINY<strong>?</strong></strong></span>
+                     </p>
+                
+
+            </section>
+        
+        <section class="post-tags">
+            <div>
+                <span>Tag(s):</span>
+                <span class="tag">
+                    
+                    
+                        <a href="/tags/linux/"># linux</a>
+                    
+                        
+                </span>
+            </div>
+            <div>
+                <a href="javascript:window.history.back();">back</a>
+                <span>· </span>
+                <a href="/">home</a>
+            </div>
+        </section>
+        <section class="post-nav">
+            
+                <a class="prev" rel="prev" href="/post/2019/linux内核设计与实现/第12章-内存管理/">《Linux内核设计与实现》/第12章-内存管理</a>
+            
+            
+            <a class="next" rel="next" href="/post/2019/linux内核设计与实现/第10章内核同步方法/">《Linux内核设计与实现》/第10章-内核同步方法</a>
+            
+        </section>
+
+
+    </article>
+</div>
+
+        </div>
+        <footer id="footer" class="footer">
+    <div class="copyright">
+        <span>© LouisozZ | Powered by <a href="https://hexo.io" target="_blank">Hexo</a> & <a href="https://github.com/Siricee/hexo-theme-Chic" target="_blank">Chic</a></span>
+    </div>
+</footer>
+
+    </div>
+</body>
+</html>

@@ -1,0 +1,886 @@
+<!DOCTYPE html>
+<html lang="en">
+<head><meta name="generator" content="Hexo 3.9.0">
+    <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, user-scalable=no, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0">
+<meta http-equiv="X-UA-Compatible" content="ie=edge">
+
+
+
+<title>《Linux内核设计与实现》/第12章-内存管理 | LouisozZ的博客</title>
+
+
+
+    <link rel="icon" href="/head.png">
+
+
+
+
+    <!-- stylesheets list from _config.yml -->
+    
+    <link rel="stylesheet" href="/css/style.css">
+    
+
+
+
+    <!-- scripts list from _config.yml -->
+    
+    <script src="/js/script.js"></script>
+    
+    <script src="/js/tocbot.min.js"></script>
+    
+
+
+
+    
+    
+        
+    
+
+
+</head>
+<body>
+    <div class="wrapper">
+        <header>
+    <nav class="navbar">
+        <div class="container">
+            <div class="navbar-header header-logo"><a href="/">LouisozZ 的博客</a></div>
+            <div class="menu navbar-right">
+                
+                    <a class="menu-item" href="/archives">Posts</a>
+                
+                    <a class="menu-item" href="/category">Categories</a>
+                
+                    <a class="menu-item" href="/tag">Tags</a>
+                
+                    <a class="menu-item" href="/about">About</a>
+                
+                <input id="switch_default" type="checkbox" class="switch_default">
+                <label for="switch_default" class="toggleBtn"></label>
+            </div>
+
+        </div>
+    </nav>
+
+    
+    <nav class="navbar-mobile" id="nav-mobile">
+        <div class="container">
+            <div class="navbar-header">
+                <div>
+                    <a href="/">LouisozZ 的博客</a><a id="mobile-toggle-theme">·&nbsp;Light</a>
+                </div>
+                <div class="menu-toggle" onclick="mobileBtn()">&#9776; Menu</div>
+            </div>
+            <div class="menu" id="mobile-menu">
+                
+                    <a class="menu-item" href="/archives">Posts</a>
+                
+                    <a class="menu-item" href="/category">Categories</a>
+                
+                    <a class="menu-item" href="/tag">Tags</a>
+                
+                    <a class="menu-item" href="/about">About</a>
+                
+            </div>
+        </div>
+    </nav>
+
+</header>
+<script>
+    var mobileBtn = function f() {
+        var toggleMenu = document.getElementsByClassName("menu-toggle")[0];
+        var mobileMenu = document.getElementById("mobile-menu");
+        if(toggleMenu.classList.contains("active")){
+           toggleMenu.classList.remove("active")
+            mobileMenu.classList.remove("active")
+        }else{
+            toggleMenu.classList.add("active")
+            mobileMenu.classList.add("active")
+        }
+    }
+</script>
+        <div class="main">
+            <div class="container">
+    
+    
+        <div class="post-toc">
+    <div class="tocbot-list">
+    </div>
+    <div class="tocbot-list-menu">
+        <a class="tocbot-toc-expand" onclick="expand_toc()">Expand all</a>
+        <a onclick="go_top()">Back to top</a>
+        <a onclick="go_bottom()">Go to bottom</a>
+    </div>
+</div>
+
+<script>
+    document.ready(
+        function () {
+            tocbot.init({
+                tocSelector: '.tocbot-list',
+                contentSelector: '.post-content',
+                headingSelector: 'h1, h2, h3, h4, h5',
+                collapseDepth: 1,
+                orderedList: false,
+                scrollSmooth: true,
+            })
+        }
+    )
+
+    function expand_toc() {
+        var b = document.querySelector(".tocbot-toc-expand");
+        tocbot.init({
+            tocSelector: '.tocbot-list',
+            contentSelector: '.post-content',
+            headingSelector: 'h1, h2, h3, h4, h5',
+            collapseDepth: 6,
+            orderedList: false,
+            scrollSmooth: true,
+        });
+        b.setAttribute("onclick", "collapse_toc()");
+        b.innerHTML = "Collapse all"
+    }
+
+    function collapse_toc() {
+        var b = document.querySelector(".tocbot-toc-expand");
+        tocbot.init({
+            tocSelector: '.tocbot-list',
+            contentSelector: '.post-content',
+            headingSelector: 'h1, h2, h3, h4, h5',
+            collapseDepth: 1,
+            orderedList: false,
+            scrollSmooth: true,
+        });
+        b.setAttribute("onclick", "expand_toc()");
+        b.innerHTML = "Expand all"
+    }
+
+    function go_top() {
+        window.scrollTo(0, 0);
+    }
+
+    function go_bottom() {
+        window.scrollTo(0, document.body.scrollHeight);
+    }
+
+</script>
+    
+
+    
+    <article class="post-wrap">
+        <header class="post-header">
+            <h1 class="post-title">《Linux内核设计与实现》/第12章-内存管理</h1>
+            
+                <div class="post-meta">
+                    
+                        Author: <a itemprop="author" rel="author" href="/">LouisozZ</a>
+                    
+
+                    
+                        <span class="post-time">
+                        Date: <a href="#">August 12, 2019&nbsp;&nbsp;11:10:54</a>
+                        </span>
+                    
+                    
+                        <span class="post-category">
+                    Category:
+                            
+                                <a href="/categories/linux内核/">linux内核</a>
+                            
+                        </span>
+                    
+                </div>
+            
+        </header>
+
+        <div class="post-content">
+            <!-- # 第 12 章 &nbsp;&nbsp; 内存管理 -->
+
+<!-- TOC -->
+<ul>
+<li><a href="#页">页</a></li>
+<li><a href="#区">区</a></li>
+<li><a href="#获得页与释放页以页为单位来分配及释放">获得页与释放页（以页为单位来分配及释放）</a><ul>
+<li><a href="#获得页">获得页</a></li>
+<li><a href="#释放页">释放页</a></li>
+<li><a href="#使用示例">使用示例</a></li>
+</ul>
+</li>
+<li><a href="#以字节位单位来分配及释放">以字节位单位来分配及释放</a><ul>
+<li><a href="#kmalloc">kmalloc()</a></li>
+<li><a href="#gfp_t-标志">gfp_t 标志</a></li>
+<li><a href="#vmalloc">vmalloc()</a></li>
+</ul>
+</li>
+<li><a href="#伙伴系统buddy-system">伙伴系统(buddy system)</a></li>
+<li><a href="#slab-层">slab 层</a><ul>
+<li><a href="#slab分配器接口">slab分配器接口</a></li>
+</ul>
+</li>
+<li><a href="#在栈上的静态分配">在栈上的静态分配</a></li>
+<li><a href="#高端内存映射">高端内存映射</a><ul>
+<li><a href="#永久映射">永久映射</a></li>
+<li><a href="#临时映射">临时映射</a></li>
+</ul>
+</li>
+<li><a href="#每个-cpu-的分配">每个 CPU 的分配</a></li>
+<li><a href="#新的每个-cpu-接口">新的每个 CPU 接口</a><ul>
+<li><a href="#编译时-percpu-数据">编译时 percpu 数据</a></li>
+<li><a href="#运行时-percpu-数据">运行时 percpu 数据</a></li>
+</ul>
+</li>
+<li><a href="#为啥要使用-percpu-数据">为啥要使用 percpu 数据？</a></li>
+<li><a href="#分配函数选择">分配函数选择</a></li>
+</ul>
+<p>要理解 linux 的内存管理，首先需要知道内存布局。后面的图都是基于 32 位 4G 内存的系统。</p>
+<p><img src="/picture/%E8%99%9A%E6%8B%9F%E5%86%85%E5%AD%98%E7%BB%93%E6%9E%84.jpg" alt="进程虚拟地址空间布局"></p>
+<p>上图摘录自《深入理解计算机系统》，其中较为详细的是用户地址空间的布局。</p>
+<p><img src="/picture/%E5%8A%A0%E8%BD%BD%E5%99%A8%E6%98%A0%E5%B0%84%E7%94%A8%E6%88%B7%E5%9C%B0%E5%9D%80%E7%A9%BA%E9%97%B4.jpg" alt="加载器映射用户地址空间"></p>
+<p>上图摘录自《深入理解计算机系统》，是一个用户程序被加载到内存的时候，在用户地址空间，加载器执行的<strong>内存映射</strong>行为。</p>
+<p><span id="kernelspace"></span><br><img src="/picture/%E5%86%85%E6%A0%B8%E8%99%9A%E6%8B%9F%E5%9C%B0%E5%9D%80%E7%A9%BA%E9%97%B4.jpg" alt="内核虚拟地址空间"> </p>
+<p>上图摘录自博客《<a href="https://www.bbsmax.com/A/q4zVOlZlJK/" target="_blank" rel="noopener">linux内核内存管理(zone_dma zone_normal zone_highmem)</a>》。在 32 位，4G 内存大小的机器上，0-3G 的逻辑地址就是用户程序的地址空间，3-4G 的逻辑地址是对用户进程不可见的，这部分就是内核的地址空间。在这 1G 的空间里，还分了区，不同的区有不同的作用，详细请见后面的 <a href="#区">区</a> 一节。</p>
+<p><img src="/picture/%E5%9C%B0%E5%9D%80%E7%A9%BA%E9%97%B4%E6%98%A0%E5%B0%84%E5%85%B3%E7%B3%BB.jpg" alt="内核空间地址映射关系"></p>
+<p>上图摘录自博客《<a href="https://www.bbsmax.com/A/q4zVOlZlJK/" target="_blank" rel="noopener">linux内核内存管理(zone_dma zone_normal zone_highmem)</a>》。是内核虚拟地址空间与物理内存的映射关系，可以看出，内核虚拟地址 3G-(3G+896M) 是线性映射到物理地址 0-896M，也就是说，3G - (3G+896M) 的虚拟地址直接减去 PAGE_OFFSET(0xC0000000) 得到的就是物理地址。而 (3G+896M) - 4G 这段虚拟地址，是属于高端地址，他们不是直接有一个一一对应的到物理内存的映射关系（3G - (3G+896M) 这段虚拟地址是跟 0-896M 的物理地址一一对应的映射关系），他们是可以被映射到 896M-4G 整个物理内存的区域。</p>
+<p><img src="/picture/%E6%AE%B5%E9%A1%B5%E5%BC%8F%E6%9C%BA%E5%88%B6.png" alt="段页式机制"></p>
+<p>上图摘录自博客《<a href="http://ilinuxkernel.com/?p=1013" target="_blank" rel="noopener">Linux内核高端内存</a>》。是补充说明的段页式寻址流程。</p>
+<p>后面的内容若是涉及到了 <strong>NUMA(Non-Uniform Memory Access)</strong>，非一致性内存访问，可以参考以下文章：<br>《<a href="http://cenalulu.github.io/linux/numa/" target="_blank" rel="noopener">NUMA架构的CPU–你真的用好了吗？</a>》<br>《<a href="https://www.ibm.com/developerworks/cn/linux/l-numa/index.html" target="_blank" rel="noopener">Linux 的 NUMA 技术</a>》<br>《<a href="https://zhuanlan.zhihu.com/p/33621500" target="_blank" rel="noopener">深挖NUMA</a>》</p>
+<h2 id="页"><a href="#页" class="headerlink" title="页"></a>页</h2><p><strong>内核把物理页作为内存管理的基本单位</strong>，因为内存管理单元 MMU (Memory Management Unit) 这个硬件通常是以页为单位进行处理的。32 位的体系结构通常支持的是 4KB 的页大小，64 位体系结构通常支持的是 8KB 页大小。<strong>内核为每一个物理页都创建了一个这样的结构。</strong> </p>
+<p>内核使用结构 page 来描述<strong>物理页</strong>（下面只选取了一些域，并且现在的 page 结构已经发生了变化，这里只为了能够说明，所以选择了 2.6 内核版本的页结构）：</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line"><span class="class"><span class="keyword">struct</span> <span class="title">page</span>&#123;</span></span><br><span class="line">    <span class="keyword">unsigned</span> <span class="keyword">long</span> flags;</span><br><span class="line">    <span class="keyword">atomic_t</span> _count;</span><br><span class="line">    <span class="keyword">atomic_t</span> _mapount;</span><br><span class="line">    <span class="keyword">unsigned</span> <span class="keyword">long</span> <span class="keyword">private</span>;</span><br><span class="line">    <span class="class"><span class="keyword">struct</span> <span class="title">address_space</span> *<span class="title">mapping</span>;</span></span><br><span class="line">    <span class="keyword">pgoff_t</span> index;</span><br><span class="line">    <span class="class"><span class="keyword">struct</span> <span class="title">list_head</span> <span class="title">lru</span>;</span></span><br><span class="line">    <span class="keyword">void</span> *<span class="keyword">virtual</span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<ul>
+<li><strong>flags</strong> ：该域用来存放页的状态，在文件 <a href="https://github.com/torvalds/linux/blob/master/include/linux/page-flags.h#L99" target="_blank" rel="noopener">include/linux/page-flags.h</a> 中详细的可表述的状态。flags 的每一个位都是一个状态，所以最多一次可以同时表示一个页的 32 种状态。</li>
+<li><strong>_count</strong> ：用来存放这个物理页的引用计数。当引用计数值减少为 -1 就表示当前内核没有引用该页，所以该页就可以用于新的分配（映射）。<strong>内核代码不要直接检查这个字段，而应该使用 page_count(struct page *) 接口来检查。</strong> 不过，该函数返回 0 表示当前页空闲；返回整数表示当前页正在被使用。<br>一个页可以用于：页缓存、私有内存映射、进程页表中的映射等。</li>
+<li><strong>virtual</strong> ：表示的是页的虚拟地址。通常情况下这个域的值就是页在内核虚拟地址空间里面的虚拟地址。对于高端内存区域的页来说，virtual 域的值为 NULL，当内核需要操作高端内存区的页的时候，把它动态映射到内核虚拟地址空间的高端内存区里面，即 32 位 4G 内存机器下，虚拟地址范围为 3G+896M - 4G 的地址空间。</li>
+</ul>
+<p><strong>内核使用上述的 page 结构来管理内存中的所有页！</strong> </p>
+<h2 id="区"><a href="#区" class="headerlink" title="区"></a>区</h2><p>终于说到了区，有关于高端内存的解释就在后面。</p>
+<p>首先说明以下几个事实：</p>
+<ol>
+<li>X86体系结构的 32 位机器上面，ISA 设备要执行 DMA(Directly Memory Access)，直接内存访问，只能寻址物理内存的前 16M。换句话说，只有物理内存的前 16M 可以用来执行 DMA 操作，其他的内存区域都不能。</li>
+<li>不论是内核使用的页还是用户地址空间使用的页，内核都要负责管理，所以内核要能够感知到整个内存的页。</li>
+<li>由于开启了分页机制，内核想要访问物理地址空间的时候，要先建立映射关系，通过虚拟地址来访问。</li>
+<li>3G - 4G 的逻辑地址空间，如果都是有一个一一映射的关系，那么是不能映射 0 - 3G 的地址空间的，也就没有办法管理所有的页。</li>
+</ol>
+<p>综合上面的四点，所以就有了内存分区得出现：</p>
+<table>
+<thead>
+<tr>
+<th>分区</th>
+<th>描述</th>
+<th>物理内存范围</th>
+<th>虚拟内存范围</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>ZONE_DMA</td>
+<td>DMA 使用的页从这里分配</td>
+<td>0-16M</td>
+<td>3G-(3G+16M)</td>
+</tr>
+<tr>
+<td>ZONE_DMA32</td>
+<td>DMA 使用的页，但是只能被32位设备访问</td>
+<td>0-16M</td>
+<td>3G-(3G+16M)</td>
+</tr>
+<tr>
+<td>ZONE_NORMAL</td>
+<td>一般的内存需求可以从这里获取页</td>
+<td>16M-896M</td>
+<td>(3G+16M)-(3G+896M)</td>
+</tr>
+<tr>
+<td>ZONE_HIGHMEM</td>
+<td>动态被映射的页</td>
+<td>896M-1G</td>
+<td>(3G+896M)-4G</td>
+</tr>
+</tbody></table>
+<p><span id="zonehighmem"></span><br>其中 <strong>ZONE_HIGHMEM</strong> 表示的就是那些不能被直接映射的地址空间，在 32 位机器上，代表的就是物理内存地址大于 896M 的地址，这些地址都应该动态的被映射到 (3G+896M)-4G 的地址空间上，所谓动态映射，举个例子，物理地址起始地址为 2G 的一个页被映射到了物理地址 896M-1G 上，此时的逻辑地址可能是 900M+PAGE_OFFSET，当该页被用完之后，解除了这种映射关系；另一个程序现在被加载到物理内存的 3G 地方，此时 3G 物理地址为起始地址的页就可以同样被映射到 900M+PAGE_OFFSET 的逻辑地址上，这就是动态映射，因为前面已经解除了 2G-&gt;900M+PAGE_OFFSET 的映射关系，所以这里 3G-&gt;900M+PAGE_OFFSET 的映射关系是可以被正确处理的。<strong>不过对于 64 位的机器来说，就没有 ZONE_HIGHMEM 区域，该区域在内核里面是空，因为 64 位的机器可以将至少 512G 的内存直接映射到 ZONE_NORMAL 区上面。</strong> </p>
+<blockquote>
+<p>ZONE_DMA 的范围是 0-16M，该区域的物理页面专门供 I/O 设备的 DMA 使用。之所以要单独管理 DMA 页面，是因为 <strong>DMA使用物理地址直接访问内存，不经过 MMU，且需要连续的缓冲区。</strong> 所以为了提供物理上连续的缓冲区，必须从物理地址空间专门划分一段区域用于 DMA。<br>ZONE_NORMAL 的范围是 16M-896M，该区域的物理页面内核是可以直接使用的(直接将物理地址加上 0xC0000000 就得到了逻辑地址)。<br>ZONE_HIGHMEM 的范围是 896M-结束，该区域就是高端内存，内核不能直接使用，需要经过映射，转换为逻辑地址。</p>
+</blockquote>
+<blockquote>
+<p>如前面的<a href="#kernelspace">第三张图</a>所示的那样，内核空间高端的 128M 又主要分为三部分：<strong>vmalloc area</strong>、<strong>持久内核映射区</strong>、<strong>临时内核映射区</strong>。</p>
+</blockquote>
+<blockquote>
+<p>由于 ZONE_NORMAL 和内核线性空间存在直接映射关系，所以内核会将频繁使用的数据，如 kernel 代码、GDT、IDT、PGD、mem_map 数组，这些放在 ZONE_NORMAL 区里面，而将 用户数据、页表 等不常用数据放在 ZONE_HIGHMEM 里面，只在要访问这些数据的时候才建立映射关系（通过 kmap() 函数），使用完之后就断开映射关系。</p>
+</blockquote>
+<blockquote>
+<p>由于开启了分页机制，内核想要访问物理地址空间的话，必须先建立映射关系，然后通过虚拟地址来访问。为了能够访问所有的物理地址空间，就要将全部物理地址空间映射到1G的内核线性空间中，这显然不可能。于是，内核将0~896M的物理地址空间一对一映射到自己的线性地址空间中，这样它便可以随时访问ZONE_DMA和ZONE_NORMAL里的物理页面；此时内核剩下的128M线性地址空间不足以完全映射所有的ZONE_HIGHMEM，Linux采取了动态映射的方法，即按需的将ZONE_HIGHMEM里的物理页面映射到kernel space的最后128M线性地址空间里，使用完之后释放映射关系，以供其它物理页面映射。虽然这样存在效率的问题，但是内核毕竟可以正常的访问所有的物理地址空间了。</p>
+</blockquote>
+<p><strong>上述四段话摘录自博客《<a href="https://www.bbsmax.com/A/q4zVOlZlJK/" target="_blank" rel="noopener">linux内核内存管理(zone_dma zone_normal zone_highmem)</a>》。</strong></p>
+<p><img src="/picture/%E9%AB%98%E7%AB%AF%E5%86%85%E5%AD%98%E5%88%92%E5%88%86.png" alt="高端内存划分"></p>
+<p>内核将高端内存划分为3部分：VMALLOC_START<del>VMALLOC_END、KMAP_BASE</del>FIXADDR_START和FIXADDR_START~4G。</p>
+<p>对于高端内存，可以通过 alloc_page() 或者其它函数获得对应的 page，但是要想访问实际物理内存，还得把 page 转为线性地址才行（为什么？想想 MMU 是如何访问物理内存的），也就是说，我们需要为高端内存对应的 page 找一个线性空间，这个过程称为高端内存映射。</p>
+<p>对应高端内存的3部分，高端内存映射有三种方式：  </p>
+<ol>
+<li><p><strong>映射到“内核动态映射空间”（noncontiguous memory allocation）</strong><br>这种方式很简单，因为通过 vmalloc() ，在”内核动态映射空间”申请内存的时候，就可能从高端内存获得页面（参看 vmalloc 的实现），因此说高端内存有可能映射到”内核动态映射空间”中。<br><span id="permanentkernelmapping"></span></p>
+</li>
+<li><p><strong>持久内核映射（permanent kernel mapping）</strong><br>如果是通过 alloc_page() 获得了高端内存对应的 page，如何给它找个线性空间？<br>内核专门为此留出一块线性空间，从 PKMAP_BASE 到 FIXADDR_START ，用于映射高端内存。在 2.6内核上，这个地址范围是 4G-8M 到 4G-4M 之间。这个空间起叫”内核永久映射空间”或者”永久内核映射空间”。这个空间和其它空间使用同样的页目录表，对于内核来说，就是 swapper_pg_dir，对普通进程来说，通过 CR3 寄存器指向。通常情况下，这个空间是 4M 大小，因此仅仅需要一个页表即可，内核通过来 pkmap_page_table 寻找这个页表。通过 kmap()，可以把一个 page 映射到这个空间来。由于这个空间是 4M 大小，最多能同时映射 1024 个 page。因此，对于不使用的的 page，及应该时从这个空间释放掉（也就是解除映射关系），通过 kunmap() ，可以把一个 page 对应的线性地址从这个空间释放出来。<br><span id="temporarykernelmapping"></span></p>
+</li>
+<li><p><strong>临时映射（temporary kernel mapping）</strong><br>内核在 FIXADDR_START 到 FIXADDR_TOP 之间保留了一些线性空间用于特殊需求。这个空间称为”固定映射空间”在这个空间中，有一部分用于高端内存的临时映射。<br>这块空间具有如下特点：</p>
+<ol>
+<li>每个 CPU 占用一块空间</li>
+<li>在每个 CPU 占用的那块空间中，又分为多个小空间，每个小空间大小是 1 个 page，每个小空间用于一个目的，这些目的定义在 kmap_types.h 中的 km_type 中。</li>
+</ol>
+<p>当要进行一次临时映射的时候，需要指定映射的目的，根据映射目的，可以找到对应的小空间，然后把这个空间的地址作为映射地址。这意味着一次临时映射会导致以前的映射被覆盖。通过 kmap_atomic() 可实现临时映射。</p>
+</li>
+</ol>
+<p><strong>上述内容摘录自博客《<a href="http://ilinuxkernel.com/?p=1013" target="_blank" rel="noopener">Linux内核高端内存</a>》。</strong></p>
+<p><strong>注意，区的划分没有任何物理意义，这只不过是内核用来管理页而采取的一种逻辑分组。</strong> 某些分配可能需要从特定的区中获取页，不过有的页可以从多个区中获得。例如用于 DMA 操作的页只能从 DMA 区获取，而用于一般操作的页，既可以从 ZONE_DMA 中获得，也可以从 ZONE_NORMAL 区中获得。如果一个区的可用空间不够了，那么内核会去占用别的可用区的内存。</p>
+<h2 id="获得页与释放页（以页为单位来分配及释放）"><a href="#获得页与释放页（以页为单位来分配及释放）" class="headerlink" title="获得页与释放页（以页为单位来分配及释放）"></a>获得页与释放页（以页为单位来分配及释放）</h2><h3 id="获得页"><a href="#获得页" class="headerlink" title="获得页"></a>获得页</h3><table>
+<thead>
+<tr>
+<th>页分配函数</th>
+<th>描述</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><a href="#allocpages">struct page* alloc_pages(gfp_mask,order)</a></td>
+<td>分配 2<sup>order</sup>个连续物理页，返回第一个页的 page 结构指针</td>
+</tr>
+<tr>
+<td><a href="#allocpage">struct page* alloc_page(gfp_mask)</a></td>
+<td>只分配一页，返回指向描述物理内存页的页结构指针</td>
+</tr>
+<tr>
+<td><a href="#pageaddress">struct page*page_address(&amp;a_page)</a></td>
+<td>返回 a_page 所指物理页的逻辑地址</td>
+</tr>
+<tr>
+<td><a href="#getfreepages">unsigned long __get_free_pages(gfp_mask,order)</a></td>
+<td>分配 2<sup>order</sup>个连续物理页，返回第一个页的逻辑地址</td>
+</tr>
+<tr>
+<td><a href="#allocpage">unsigned long __get_free_page(gfp_mask)</a></td>
+<td>只分配一页，返回该页所在的逻辑地址</td>
+</tr>
+<tr>
+<td><a href="#getzeroedpage">unsigned long get_zeroed_page(gfp_mask)</a></td>
+<td>只分配一页，返回该页所在的逻辑地址，并将页内数据都填充为 0</td>
+</tr>
+</tbody></table>
+<p><span id="allocpages"></span></p>
+<ul>
+<li><strong>struct page* alloc_pages(gfp_t gfp_mask,unsigned int order)</strong><br> 该函数分配 2<sup>order</sup> 个连续物理页，并返回一个指针，该指针指向第一个页的 page 结构；如果出错，就返回 NULL。<br><span id="pageaddress"></span></li>
+<li><strong>struct page*page_address(struct page* a_page)</strong><br> 该函数返回一个指针，指向给定的物理页当前所在的逻辑地址。<br><span id="getfreepages"></span></li>
+<li><strong>unsigned long __get_free_pages(gfp_t gfp_mask,unsigned int order)</strong><br> 这个函数与 alloc_pages() 作用相同，不过它直接返回所请求的第一个页的逻辑地址。因为页是连续的，所以其他页也会紧随其后。<br><span id="allocpage"></span></li>
+<li><strong>struct page* alloc_page(gfp_t gfp_mask)</strong>  </li>
+<li><strong>unsigned long __get_free_page(gfp_t gfp_mask)</strong><br> 上面两个函数都是只请求分配一个页，所以相较于带 ‘s’ 的版本，就没有 order 参数。<br><span id="getzeroedpage"></span></li>
+<li><strong>unsigned long get_zeroed_page(gfp_t gfp_mask)</strong><br> 这个函数与 <code>__get_free_page()</code> 工作方式相同，不过会把分配好的页内的数据都填充为 0。</li>
+</ul>
+<h3 id="释放页"><a href="#释放页" class="headerlink" title="释放页"></a>释放页</h3><table>
+<thead>
+<tr>
+<th>页释放函数</th>
+<th>描述</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><a href="#innerfreepages">void __free_pages(&amp;a_page,order)</a></td>
+<td>释放 a_page 所指向的页结构体，order 与页分配函数中的意义相同</td>
+</tr>
+<tr>
+<td><a href="#freepages">void free_pages(addr,order)</a></td>
+<td>释放逻辑地址为 addr 的页，order 与页分配函数中的意义相同</td>
+</tr>
+<tr>
+<td><a href="#freepage">void free_page(addr)</a></td>
+<td>释放逻辑地址为 addr 的页</td>
+</tr>
+</tbody></table>
+<p><span id="innerfreepages"></span></p>
+<ul>
+<li><strong>void __free_pages(struct page* a_page,unsigned int order)</strong><br> <strong>只能释放属于你自己的页！如果传递了错误的 page 结构或者地址，或者用了错误的 order 数值，都可能导致系统崩溃！</strong> 这个函数释放 2<sup>order</sup> 个连续的物理页，以 a_page 为计算页数的起始页。<br><span id="freepages"></span></li>
+<li><strong>void free_pages(unsigned long addr,unsigned int order)</strong><br> <strong>只能释放属于你自己的页！如果传递了错误的 page 结构或者地址，或者用了错误的 order 数值，都可能导致系统崩溃！</strong> 这个函数释放 2<sup>order</sup> 个连续的物理页，以 addr 逻辑地址所在物理页为计算页数的起始页。<br><span id="freepage"></span></li>
+<li><strong>void free_page(unsigned long addr)</strong><br> <strong>只能释放属于你自己的页！如果传递了错误的 page 结构或者地址，或者用了错误的 order 数值，都可能导致系统崩溃！</strong> 这个函数释放 addr 逻辑地址所在物理页。</li>
+</ul>
+<h3 id="使用示例"><a href="#使用示例" class="headerlink" title="使用示例"></a>使用示例</h3><figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">unsigned</span> <span class="keyword">long</span> temp_v_address;</span><br><span class="line"></span><br><span class="line"><span class="comment">//请求分配 8 个页大小</span></span><br><span class="line">temp_v_address = __get_free_pages(GFP_KERNEL,<span class="number">3</span>);</span><br><span class="line"><span class="keyword">if</span>(!temp_v_address)&#123;</span><br><span class="line">    <span class="comment">/*分配页出错，需要处理！！！*/</span></span><br><span class="line">    <span class="keyword">return</span> -ENOMEM;</span><br><span class="line">&#125;</span><br><span class="line">...</span><br><span class="line"><span class="comment">//使用完这 8 个页之后释放掉</span></span><br><span class="line">free_pages(temp_v_address,<span class="number">3</span>);</span><br><span class="line"><span class="comment">//后面的代码就不应该再访问这 8 个页中的数据了</span></span><br></pre></td></tr></table></figure>
+
+<p>由此可以看出，在每次请求页之后，都应该去判断是否获得了期望请求的页，这个跟在用户空间里面要判断 malloc 是否返回一个合法地址是相同的。</p>
+<p>因为在内核里面，是对页操作，所以应该尽早的请求页，否则如果在中间请求失败，那么调用了请求页接口的这个函数，在请求页之前的工作都应该回退到函数被调用之前，也就是在上面 <code>if(!temp_v_address)</code> 的代码块里面需要做这项工作。</p>
+<h2 id="以字节位单位来分配及释放"><a href="#以字节位单位来分配及释放" class="headerlink" title="以字节位单位来分配及释放"></a>以字节位单位来分配及释放</h2><h3 id="kmalloc"><a href="#kmalloc" class="headerlink" title="kmalloc()"></a>kmalloc()</h3><p>kmalloc() 函数与用户空间的 malloc() 函数非常相似，但是 kmalloc() 多了一个参数 flags。</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">void</span>* <span class="title">kmalloc</span><span class="params">(<span class="keyword">size_t</span> size, <span class="keyword">gfp_t</span> flags)</span></span>;</span><br></pre></td></tr></table></figure>
+
+<p>该函数用于以字节为单位申请内核内存。如果要申请的内存是一个页，那么还是使用上一节所提到的页分配接口。该函数返回的是一个指向<strong>大小至少为 size</strong> 的内存块的指针，<strong>这个内存块在物理上是连续的</strong>，指针值是逻辑地址。如果分配出错，返回的是 NULL。除非是没有足够的内存可用，否则总是会分配成功的。<strong>因为可能会分配出错，因此对 kmalloc 的返回值进行非空判断也是必须的。</strong> </p>
+<h3 id="gfp-t-标志"><a href="#gfp-t-标志" class="headerlink" title="gfp_t 标志"></a>gfp_t 标志</h3><p>不管是在低级的<a href="#allocpages">页分配函数中</a>，还是在<a href="#kmalloc()">kmalloc()</a>这个按字节分配的函数中，都要求提供分配器标志。</p>
+<p>分配器标志分为三类：<strong>行为修饰符</strong> 、<strong>区修饰符</strong> 、<strong>类型</strong> 。一般来说，<strong>类型</strong> 类别是对行为修饰符和区修饰符的组合，所以一般来说，我们直接使用类型类的分配器标志就可以了。不过下面还是简单介绍一下前两种。</p>
+<ul>
+<li><strong>行为修饰符</strong><br> 表示内核应当如何分配所需的内存。是否可睡眠？是否可以启动磁盘？是否可以启动文件系统等。<table>
+<thead>
+<tr>
+<th>标志</th>
+<th>描述</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>__GFP_WAIT</td>
+<td>分配器可以睡眠</td>
+</tr>
+<tr>
+<td>__GFP_HIGH</td>
+<td>分配器可以访问紧急事件缓冲池</td>
+</tr>
+<tr>
+<td>__GFP_IO</td>
+<td>分配器可以启动磁盘 I/O</td>
+</tr>
+<tr>
+<td>__GFP_FS</td>
+<td>分配器可以启动文件系统 I/O</td>
+</tr>
+<tr>
+<td>__GFP_COLD</td>
+<td>分配器应该使用高速缓冲中快要淘汰出去的页</td>
+</tr>
+<tr>
+<td>__GFP_NOWARN</td>
+<td>分配器将不打印失败警告</td>
+</tr>
+<tr>
+<td>__GFP_REPEAT</td>
+<td>分配器在分配失败时重新进行分配，但是重新进行的分配还是可能失败</td>
+</tr>
+<tr>
+<td>__GFP_NOFALL</td>
+<td>如果分配失败，分配器将无限的重复进行分配</td>
+</tr>
+<tr>
+<td>__GFP_NORETRY</td>
+<td>分配器在分配失败的时候绝不重新分配</td>
+</tr>
+<tr>
+<td>__GFP_NO_GROW</td>
+<td>由 slab 内部使用</td>
+</tr>
+<tr>
+<td>__GFP_COMP</td>
+<td>添加混合页元数据，在 hugeltb 的代码内部使用</td>
+</tr>
+</tbody></table>
+</li>
+<li><strong>区修饰符</strong><br> 区修饰符表示分配器该从哪里分配内存。通常，分配器可以从任何区中分配内存，不过内核优先从 ZONE_NORMAL 区中分配，以保证别的区在需要内存的时候有足够的空闲页可用。<table>
+<thead>
+<tr>
+<th>标志</th>
+<th>描述</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>__GFP_DMA</td>
+<td>从 ZONE_DMA 区分配</td>
+</tr>
+<tr>
+<td>__GFP_DMA32</td>
+<td>只在 ZONE_DMA32 区分配</td>
+</tr>
+<tr>
+<td>__GFP_HIGHMEM</td>
+<td>从 ZONE_HIGHMEM 或者 ZONE_NORMAL 区分配</td>
+</tr>
+<tr>
+<td>- __GFP_DMA 标志强制内核从 ZONE_DMA 区去分配，所以得到的一定是可以用于 DMA 的内存。</td>
+<td></td>
+</tr>
+<tr>
+<td>- 指定了 __GFP_HIGHMEM 会优先从 ZONE_HIGHMEM 区得到分配，如果不能获得有效的期望分配，那么会从 ZONE_NORMAL 区得到分配。</td>
+<td></td>
+</tr>
+<tr>
+<td>- 如果没有指定任何区修饰符，那么会优先从 ZONE_NORMAL 区得到分配，如果不能获得有效的期望分配，那么会从 ZONE_DMA 区得到分配。</td>
+<td></td>
+</tr>
+<tr>
+<td>- <strong>此外还有一点需要注意，不能给 __get_free_pages() kmalloc() 指定 ZONE_HIGHMEM，因为这两个函数返回的都是内核空间逻辑地址，而不是 page 结构。有可能这两个函数所分配的内存(地址大于 896M)，还没有映射到内核的虚拟地址空间，所以在内核空间也就没有与之对应的逻辑地址。</strong></td>
+<td></td>
+</tr>
+</tbody></table>
+</li>
+</ul>
+<p>为了避免自己组装上面的修饰符的时候出错，所以内核提供了 <strong>类型</strong>，即，对修饰符组装之后的标志，来帮助分配器分配合适的内存。</p>
+<table>
+<thead>
+<tr>
+<th>类型</th>
+<th>描述</th>
+<th>修饰符</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>GFP_ATOMIC</td>
+<td>这个标志用在中断处理程序、下半部、持有自旋锁以及其他不能睡眠的地方</td>
+<td>__GFP_HIGH</td>
+</tr>
+<tr>
+<td>GFP_NOWAIT</td>
+<td>与 GFP_ATOMIC 类似，不过他不会将分配推给紧急内存池，增加了内存分配失败的可能性</td>
+<td>0</td>
+</tr>
+<tr>
+<td>GFP_NOIO</td>
+<td>这种分配可以阻塞，但是不会启动磁盘 I/O。这个标志在不能引发更多磁盘 I/O 时阻塞 I/O 代码，这可能导致不好的递归。</td>
+<td>__GFP_WAIT</td>
+</tr>
+<tr>
+<td>GFP_NOFS</td>
+<td>这种分配在必要时可能阻塞，也可能启动磁盘 I/O，但是不会启动文件系统操作。这个标志在不能再启动另一个文件系统的操作时，用在文件系统部分的代码中</td>
+<td>(<strong>GFP_WAIT|</strong>GFP_IO)</td>
+</tr>
+<tr>
+<td>GFP_KERNEL</td>
+<td>常规的分配方式，可能会阻塞。这个标志在睡眠安全时用在进程上下文代码中，为了获得调用者所需的内存，内核会尽力而为。这个标识应当是首选项。</td>
+<td>(<strong>GFP_WAIT|</strong>GFP_IO|__GFP_FS)</td>
+</tr>
+<tr>
+<td>GFP_USER</td>
+<td><strong>这也是一种常规分配方式，可能会阻塞。这个标志用于为用户空间的进程分配内存</strong>。</td>
+<td>(<strong>GFP_WAIT|</strong>GFP_IO|__GFP_FS)</td>
+</tr>
+<tr>
+<td>GFP_HIGHUSER</td>
+<td>这是从 ZONE_HIGHMEM 进行分配，可能会阻塞。这个标志用于为用户空间进程分配内存</td>
+<td>(<strong>GFP_WAIT|</strong>GFP_IO|<strong>GFP_FS|</strong>GFP_HIGHMEM)</td>
+</tr>
+<tr>
+<td>GFP_DMA</td>
+<td>从 ZONE_DMA 进行分配。这个标志通常与上面的某个标志组合使用</td>
+<td>(__GFP_DMA)</td>
+</tr>
+</tbody></table>
+<p>上述的 GFP_ATOMIC 与 GFP_KERNEL 这两个常用的类型，应当重点被区分开。最主要的就是 <strong>GFP_ATOMIC 用在不能睡眠的场景</strong>，而 <strong>GFP_KERNEL 用在可睡眠场景，并且内核尽最大努力分配</strong>。 所以综合来看，因为使用 GFP_ATOMIC 使用的场景不能睡眠，所以当当前系统内存不够的时候，也没有办法让当前的进程先睡眠，然后调用别的进程来释放掉一些内存，就导致了使用 GFP_ATOMIC 在内存紧张的时候是很容易分配失败的。而 GFP_KERNEL 在内存紧张的时候，可以先睡眠，然后调用交换刷新一些内存到硬盘，这样就就有空闲内存来提供给此次请求，所以 GFP_KERNEL 分配的成功几率会比 GFP_ATOMIC 高。</p>
+<p>至于会出现 GFP_NOFS 和 GFP_NOIO，这是因为在一些低级的内存分配场景中，如 IO 设备和文件系统里面，如果在他们的代码里面还会去请求 I/O 操作或者是文件系统的操作，那么这些操作又会带来新的内存请求，这样递归下去，就会导致系统出错。所以这些代码在被调用的时候，必须保证分配器不会再执行到其本身，否则分配可能会产生死锁。</p>
+<p>不过在内核代码的编写中，基本上用到的也就是 GFP_ATOMIC 和 GFP_KERNEL。</p>
+<p><strong>与 kmalloc() 对应的内存释放接口是 kfree()：</strong> </p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">void</span> <span class="title">kfree</span><span class="params">(<span class="keyword">const</span> <span class="keyword">void</span> *ptr)</span></span></span><br></pre></td></tr></table></figure>
+
+<p>kfree() 释放由 kmalloc() 分配出来的内存。但是如果释放的是一个已经被释放的内存，或者释放的内存块不是由 kmalloc() 分配出来的，那么就会导致严重的后果。<strong>kfree() 和 kmalloc() 要注意配对使用。并且，kfree(NULL) 是安全的。</strong> </p>
+<h3 id="vmalloc"><a href="#vmalloc" class="headerlink" title="vmalloc()"></a>vmalloc()</h3><figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">void</span> * <span class="title">vmalloc</span><span class="params">(<span class="keyword">unsigned</span> <span class="keyword">long</span> size)</span></span></span><br></pre></td></tr></table></figure>
+
+<p>该函数返回一个指针，指向的是逻辑上连续的一块内存，大小至少为 size。发生错误的时候，函数返回 NULL。函数可以睡眠，不能在中断上下文中调用，也不允许在其他不允许阻塞的情况下调用。</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">void</span> <span class="title">vfree</span><span class="params">(<span class="keyword">const</span> <span class="keyword">void</span>* addr)</span></span></span><br></pre></td></tr></table></figure>
+
+<p>使用 vfree() 来释放由 vmalloc() 申请的内存，该函数可以睡眠，没有返回值。</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">//例程</span></span><br><span class="line"><span class="keyword">char</span> * buf;</span><br><span class="line">buf = vmalloc(<span class="number">4</span>*PAGE_SIZE);</span><br><span class="line"><span class="keyword">if</span>(!buf)&#123;</span><br><span class="line">   <span class="comment">/* 分配内存失败，处理失败情况 */</span></span><br><span class="line">&#125;</span><br><span class="line">...</span><br><span class="line">vfree(buf);</span><br></pre></td></tr></table></figure>
+
+<p>vmalloc() 的工作方式和 kmalloc() 是类似的，不过 kmalloc() 分配的内存不仅在逻辑上是连续的（虚拟地址连续），在物理上也是连续的；但是 <strong>vmalloc()</strong> 所分配的内存，其虚拟地址是连续的，但是物理上无须连续。vmalloc() 通过分配非连续的物理内存块，然后“修正”页表，把内存映射到逻辑地址空间的连续区域中。</p>
+<p>大多数情况下，只有硬件设备需要用到连续得物理内存。在很多体系结构上，因为硬件设备是不在内存管理单元的管理范围之内，所以这些硬件根本就不知道虚拟地址的存在，也不会去使用虚拟地址（因为没有 MMU 来执行从虚拟地址到物理地址的翻译）。而软件使用的就是逻辑地址，因为有 MMU 来完成地址翻译，所以使用逻辑地址和虚拟地址对软件来说没有区别，再加上之前对 <a href="#zonehighmem">ZONE_HIGHMEM</a> 的讨论，内核空间只有 1G，要管理整个内存，也需要使用虚拟地址来做动态映射。</p>
+<p>不过出于对性能的考虑，内核代码里面常用的还是 kmalloc()。因为使用 vmalloc() 把不连续的物理地址映射到连续的逻辑地址空间，需要专门建立页表，而通过 vmalloc() 所申请的多个不连续物理页，需要一页一页的进行逻辑地址的映射，这就比申请的连续物理页进行直接内存映射（多个页所加的偏移值相同，甚至可以直接使用位运算）所造成的 TLB 抖动大得多。所以在内核代码里面较少会使用 vmalloc()，除非是需要申请大块内存，例如把模块动态插入到内核里面，这时候就把模块加载到由 vmalloc() 申请的内存上。</p>
+<h2 id="伙伴系统-buddy-system"><a href="#伙伴系统-buddy-system" class="headerlink" title="伙伴系统(buddy system)"></a>伙伴系统(buddy system)</h2><p>linux 内核采用了一种同时适用于 32 位和 64 位的内存分页模型。对于 32 位的系统来说，两级页表就足够寻址 32 位地址；而对于 64 位系统来说，需要使用四级页表：</p>
+<ul>
+<li>PGD 页全局目录 (Page Global Directory)</li>
+<li>PUD 页上级目录 (Page Upper Directory)</li>
+<li>PMD 页中间目录 (Page Middle Directory)</li>
+<li>PT &nbsp;&nbsp;&nbsp;&nbsp;页表 (Page Table)</li>
+</ul>
+<p>其中，PGD 的一个目录项就是一个 PUD 的地址，一个 PUD 目录项就是一个 PMD 地址，当然最后一级就是页表项，每个页表项指向一个 4KB 大小的页框，4KB 大小的页框是标准的内存分配单元。</p>
+<p><img src="/picture/K%E7%BA%A7%E9%A1%B5%E8%A1%A8%E5%9C%B0%E5%9D%80%E7%BF%BB%E8%AF%91.jpg" alt="K级页表地址翻译"></p>
+<table>
+<thead>
+<tr>
+<th>缩写</th>
+<th>全称</th>
+<th>中文</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>VPN</td>
+<td>Virtual Page Number</td>
+<td>虚拟页号</td>
+</tr>
+<tr>
+<td>VPO</td>
+<td>Virtual Page Offset</td>
+<td>虚拟页面偏移（单位字节）</td>
+</tr>
+<tr>
+<td>PPN</td>
+<td>Physical Page Number</td>
+<td>物理页号</td>
+</tr>
+<tr>
+<td>PPO</td>
+<td>Physical Page Offset</td>
+<td>物理页面偏移（单位字节）</td>
+</tr>
+<tr>
+<td>PTE</td>
+<td>Page Table Entry</td>
+<td>页表条目</td>
+</tr>
+<tr>
+<td>PTBR</td>
+<td>Page Table Base Register</td>
+<td>页表基址寄存器</td>
+</tr>
+</tbody></table>
+<p>上面就是一个地址翻译的过程。图片摘录自《深入理解计算机系统》。</p>
+<p><strong>在实际应用中，经常需要分配一组连续的页框，而频繁地申请和释放不同大小的连续页框，必然导致在已分配页框的内存块之间分散了许多小块的空闲页框。这样，即使这些页框是空闲的，其总大小是足够一次应用请求的，但是由于不连续，所以可能对要求申请连续页框的应用难以得到满足。</strong> </p>
+<p>为了尽量避免上面的情况出现，linux 内核引入了<strong>伙伴系统(Buddy System)</strong>，其原理类似于 STL 里面的二级分配器，使用了内存池的方式：</p>
+<p>内核把所有的空闲页框分组成 11 个链表，每个链表上的元素对应的不同页框大小的连续内存块，2<sup>0~10</sup> 个页框大小，即，第一个链表上的元素都是 1（2<sup>0</sup>）个页框大小的空闲内存块，第 7 条链表上的元素都是 64（2<sup>6</sup>）个页框大小的连续空闲内存块，以此类推。最大可以申请 1024 个连续页框，1024 个连续页框对应的是 4MB 大小的连续内存。</p>
+<p>假如要申请一个 256 连续页框大小的内存块，首先会从第 9（2<sup>8</sup>） 条链表上去找空闲块，如果有则将其从空闲块上摘下，返回个请求者；如果没有，就去其后面的链表上去找，如果找到了，就将找到的空闲块，每次取一半，接到对应的链表上，然后返回满足要求的最小块给申请者。要是 11 条空闲链表都没有空闲块，那么就返回错误。</p>
+<p><strong>页框块在释放的时候，会主动将两个连续的页框块合并为一个较大的页框块。</strong> </p>
+<h2 id="slab-层"><a href="#slab-层" class="headerlink" title="slab 层"></a>slab 层</h2><p>在没有 slab 的情况下，那些内核需要频繁申请和释放的对象会对内存造成负担，一方面是这些对象是内核数据结构，比较小，频繁的分配和释放会产生碎片；另一方面，在使用的时候再从内存去分配，用完之后又归还给内存，在频繁使用的情境下，这样是比较耗时的。<strong>所以就出现了 slab，他是在低级页分配的基础上再抽象出来的一层，管理的是高速缓存。</strong> </p>
+<p>在 slab 中，有三层管理结构：</p>
+<ol>
+<li>slab 分配器管理的是高速缓存组；</li>
+<li>高速缓存组管理的 slab 组；</li>
+<li>slab 对象管理的是内核数据对象组。</li>
+</ol>
+<p>注意，slab 分配器是最高层的管理策略，而下面的 slab 组是 slab 对象数组，slab 对象是一个（或者多个）页框，一个页框里面有多个内核数据对象。一个 slab 对象有三种状态：<strong>满的</strong>，<strong>空的</strong>，<strong>部分满</strong>。</p>
+<p><span id="slabhierarchy"></span><br><img src="/picture/slab%E5%B1%82%E6%AC%A1%E5%9B%BE.png" alt="slab层次图"></p>
+<p>上图中的三个最大方框表示的就是三个高速缓存（struct kmem_cache），每种内核数据结构对应一种高速缓存（task_struct,inode,page）；在一个高速缓存里面可能有多个 slab：当一个高速缓存刚被创建的时候（kmem_cache_creat），这个高速缓存里面还没有 slab，这个时候调用 kmem_cache_alloc()，slab 分配器就会调用低级的 kmem_getpages() 获得页，这样这个高速缓存里面就有了 slab 来分配内核对象；使用 kmem_cache_alloc() 来请求内核对象的时候会先从部分满的 slab 中请求，如果当前高速缓存里面的 slab 都是满的，那么就新分配一页来创建一个新的 slab。</p>
+<p>每个 slab 对象由 struct slab 来描述：</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="class"><span class="keyword">struct</span> <span class="title">slab</span>&#123;</span></span><br><span class="line">   <span class="class"><span class="keyword">struct</span> <span class="title">list_head</span>  <span class="title">list</span>;</span>       <span class="comment">/* 满、部分满、空 链表 */</span></span><br><span class="line">   <span class="keyword">unsigned</span> <span class="keyword">long</span>     colouroff;  <span class="comment">/* slab 着色的偏移量 */</span></span><br><span class="line">   <span class="keyword">void</span>*             s_mem;      <span class="comment">/* slab 中的第一个对象 */</span></span><br><span class="line">   <span class="keyword">unsigned</span> <span class="keyword">int</span>      inuse;      <span class="comment">/* slab 中已分配的对象数 */</span></span><br><span class="line">   <span class="keyword">kmem_bufctl_t</span>     <span class="built_in">free</span>;       <span class="comment">/* 第一个空闲对象（如果有） */</span></span><br><span class="line">&#125;;</span><br></pre></td></tr></table></figure>
+
+<p>以上就是 slab 分配器的设计。</p>
+<h3 id="slab分配器接口"><a href="#slab分配器接口" class="headerlink" title="slab分配器接口"></a>slab分配器接口</h3><p>在上面讲述 slab 分配器设计的时候说到了一些接口和数据结构，这些都是内核为了方便管理和使用 slab 分配器而提供的。</p>
+<p>每一个高速缓存都是一个 <code>struct kmem_cache*</code> 类型的结构指针，由下面的接口来创建：</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="function">struct kmem_cache* <span class="title">kmem_cache_creat</span><span class="params">(<span class="keyword">const</span> <span class="keyword">char</span> *name,</span></span></span><br><span class="line"><span class="function"><span class="params">                                    <span class="keyword">size_t</span> size,</span></span></span><br><span class="line"><span class="function"><span class="params">                                    <span class="keyword">size_t</span> align,</span></span></span><br><span class="line"><span class="function"><span class="params">                                    <span class="keyword">unsigned</span> <span class="keyword">long</span> flags,</span></span></span><br><span class="line"><span class="function"><span class="params">                                    <span class="keyword">void</span> (*ctor)(<span class="keyword">void</span> *)  )</span></span>;</span><br></pre></td></tr></table></figure>
+
+<ul>
+<li>第一个参数是字符串，存放高速缓存的名字；</li>
+<li>第二个参数是高速缓存中每个元素（<a href="#slabhierarchy">上面图中</a>最小的有阴影区分的小块）的大小；</li>
+<li>第三个参数是一个 slab 中第一个对象的偏移，用来保证内核对象的页内特殊对齐要求；</li>
+<li>flags 是可选设置项，用来控制高速缓存的行为，如果为 0 表示没有特殊行为。</li>
+<li>最后一个函数是高速缓存的构造函数，只有在新的页追加到高速缓存的时候构造函数才会被调用。<strong>不过 linux 的高速缓存是没有构造函数的，所以在实际调用的时候这项直接填写 NULL 就行了。</strong> </li>
+</ul>
+<p>关于 flags，可以是下面的一个或者多个执行或运算：</p>
+<ul>
+<li><strong>SLAB_HWCACHE_ALIGN</strong> ：命令 slab 分配器把一个 slab 内的所有对象按照高速缓存行对齐。这个标志会带来内存浪费，因为有着严格的对齐要求，至于会浪费多少内存，取决于对象大小以及相对告诉缓存行对齐的方式。<strong>对于会频繁使用高速缓存，而且代码本身对性能有严格要求的情况，应该设置该选项。</strong> </li>
+<li><strong>SLAB_POISON</strong> ：这个标识让 slab 分配器使用已知值 (a5a5a5a5) 填充一个 slab 对象，这就是所谓的中毒(poison)，有利于对未初始化内存的访问。</li>
+<li><strong>SLAB_RED_ZONE</strong> ：让 slab 分配器在已分配的内存周围插入 “红色警戒区” 以探测缓冲越界。</li>
+<li><strong>SLAB_PANIC</strong> ：使用了这个选项后，当申请内存失败的时候会通知 slab 分配器。这个标志在要求分配只能成功的情况下非常有用。</li>
+<li><strong>SLAB_CACHE_DMA</strong> ：这个标识命令 slab 分配器使用可以执行 DMA 的内存给每个 slab 分配空间。<strong>只有在分配的对象用于 DMA，且必须驻留在 ZONE_DMA 区的时候才使用这个标志。</strong> </li>
+</ul>
+<p>如果要撤销一个高速缓存，使用下面的接口：</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">int</span> <span class="title">kmem_cache_destroy</span><span class="params">(struct kmem_cache *cachep)</span></span></span><br></pre></td></tr></table></figure>
+
+<p>这个函数通常使用在模块注销代码中。注意，这个函数可能会睡眠，所以不要在中断上下文中调用。调用这个函数之前，应该确保以下两点：</p>
+<ol>
+<li>高速缓存中的所有 slab 都必须为空。因为只要还有一个对象被分配出去并且正在使用，那么是不能撤销这个告诉缓存的。</li>
+<li>在调用 kmem_cache_destroy() 的过程中不再访问这个高速缓存，<strong>调用者必须保证这种同步。</strong> </li>
+</ol>
+<p>这个函数调用成功返回 0，否则返回非 0。</p>
+<p>当高速缓存建立好之后，就可以从高速缓存里面分配指定大小的对象了。</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">void</span> * <span class="title">kmem_cache_alloc</span><span class="params">(struct kmem_cache *cachep, <span class="keyword">gfp_t</span> flags)</span></span></span><br></pre></td></tr></table></figure>
+
+<p>该函数从指定的高速缓存(cachep)中返回一个指向对象的指针。如果高速缓存中所有的 slab 都没有空闲对象，那么 slab 层必须通过 <code>kmem_getpages()</code> 获得新的页，flags 的值会传递给其内使用的 <code>__get_free_pages()</code> 。</p>
+<p>使用完一个对象之后，使用下面的接口将其返回个原先的高速缓存：</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">void</span> <span class="title">kmem_cache_free</span><span class="params">(struct kmem_cache *cachep, <span class="keyword">void</span> *objp)</span></span></span><br></pre></td></tr></table></figure>
+
+<p>这样就将 cachep 中的 objp 标记为空闲。</p>
+<p><strong>slab 分配器通过这些提供出来的接口，屏蔽了底层的对齐、着色、分配、释放以及回收，编写内核代码的程序员可以直接使用这些接口来创建释放内核对象，而不用自己再去实现空闲链表来减少内存碎片和提高性能。</strong> </p>
+<h2 id="在栈上的静态分配"><a href="#在栈上的静态分配" class="headerlink" title="在栈上的静态分配"></a>在栈上的静态分配</h2><p>这里的栈指的是内核栈，所谓在内核栈上静态分配指的是在一个内核函数里面创建自动变量。再讨论在栈上创建自动变量之前，先来说一下什么是内核栈，什么是用户栈，以及他们的主要区别。</p>
+<p>下面的内容大多摘录自博客《<a href="https://blog.csdn.net/DLUTBruceZhang/article/details/9326857" target="_blank" rel="noopener">进程的用户栈和内核栈</a>》，在其中我根据我上面讲述的内容做了一些额外补充说明。</p>
+<blockquote>
+<p>一个进程有两个堆栈，用户堆栈和内核堆栈。内核在创建一个新的进程的时候，创建进程描述符 task_struct 对象的同时，也会为其分配好堆栈（我的个人注解– 所分配好的应该是内核堆栈，用户堆栈是可以动态增长的，所以一开始应该是一个基址。 –我的个人注解）。用户堆栈的空间指向的是用户地址空间，内核堆栈的空间指向的是内核地址空间。当进程运行于用户态的时候，CPU 堆栈指针寄存器存放的是用户堆栈栈顶地址，使用用户栈；当进程运行于内核态的时候（或者叫当前内核代码运行于该进程上下文的时候），CPU 堆栈指针寄存器存放的是内核堆栈栈基址，使用内核栈。</p>
+</blockquote>
+<blockquote>
+<p>当进程由于中断或者系统调用进入到内核态的时候，首先会将当前的用户堆栈栈顶地址保存到内核堆栈里面，然后设置 CPU 堆栈指针寄存器的值为：内核堆栈基址+一个地址，这样就完成了用户栈向内核栈的切换。（这里涉及到一个内核堆栈基址的问题，后面讲。）</p>
+</blockquote>
+<blockquote>
+<p>当进程的内核代码执行完成之后，恢复保存在内核栈里面的用户栈栈顶地址到 CPU 栈指针寄存器，完成内核栈向用户栈的切换。</p>
+</blockquote>
+<blockquote>
+<p>现在来说，为什么切换到内核栈的时候，是切换到：内核堆栈基址+一个地址。首先，<strong>当进程从用户态进入到内核态的时候，内核堆栈是空的</strong>。因为内核代码都是提供服务，切换到内核态是使用内核的服务，要是没有使用完服务，是不会退出回到用户态，所以每次进来出去，栈帧都会平衡到初始状态，所以下一次从用户态进入内核态，内核栈还是空的，所以内核栈的切换只要换到内核栈的起始位置就好了，不过压了一个用户栈地址到内核栈，所以就变成了上面使用的地址。</p>
+</blockquote>
+<blockquote>
+<p>说到了这里，结合之前说的内核页分配，来说说进程切换的过程。进程切换的时候，会执行下面五步：（1）保存当前进程的 CPU 寄存器值（PC,R0~R13）到本进程的栈中；（2）保存 SP （用户栈栈顶）到 task-&gt;thread.save 中；（3）从新进程的 task-&gt;thread.save 中恢复 SP 为新进程的用户栈，完成栈切换；（4）从新进程的栈中恢复 CPU 相关寄存器值，完成上下文；（5）新进程开始运行，完成任务切换。</p>
+</blockquote>
+<blockquote>
+<p>那么谁来完成进程切换？答：内核代码。当系统时钟中断到来，开始执行内核代码：检测到当前进程时间片用完，调用 <code>schedule()</code> 函数，内部调用 <code>switch_mm()</code> 和 <code>switch_to()</code>，前者切换页表，后者切换上下文。这时候都是运行在内核代码里面，这些函数调用链，使用的是内核堆栈，使用的虚拟地址，就是通过上面讲过的那些页分配接口、字节分配接口得到的内核虚拟地址，使用的是内核的映射关系，内核映射页表，<strong>没有使用切换和被切换的进程页表！</strong></p>
+</blockquote>
+<p>总结整理一下上面的要点：</p>
+<ol>
+<li>进程用户栈和内核栈是分开的，不交叉；</li>
+<li>内核代码使用内核栈，每次从用户态切换到内核态，内核栈为空；</li>
+<li>内核态虽然是在进程上下文，但是使用的是内核映射页表，使用<a href="#innerfreepages">前面讲述的接口</a>得到的内核虚拟地址。</li>
+</ol>
+<p>现在来说说在内核栈要注意的事情。内核栈大小是固定的，不像用户栈是动态变化的，只要不冲突到动态库加载和堆，就可以一直增长。内核栈大小可配置，一页或者两页，如果是一页，那么内核的中断就有单独的中断栈；如果是两页大小，那么中断也会使用内核栈。</p>
+<p><strong>知道了内核栈大小是较小且固定，所以在编写内核代码的时候要注意的就是不要分配大的自动变量，否则容易越过内核栈而破坏掉别的内核数据。所以，对于那些会占用较大内存的函数，为其变量使用动态分配（alloc_pages() 等）的方式来获取内存，这样的话就是内核的页表映射问题，就不会使用可怜的内核栈</strong>。</p>
+<h2 id="高端内存映射"><a href="#高端内存映射" class="headerlink" title="高端内存映射"></a>高端内存映射</h2><p>在 X86 体系结构上，高于 896M 的内存是属于高端内存，高端内存的页不会永久的（线性映射）或者自动的映射到<strong>内核地址空间</strong>。分配一个页之后，如果内核想要使用这个页，就得使用逻辑地址通过页表映射关系来操作对应的物理内存，换句话说，内核代码使用的内存操作的是其内核地址空间内的逻辑地址。</p>
+<p>通过 <a href="#allocpages">alloc_pages()</a> 获得的 struct page* 结构是没有被映射到内核的虚拟地址空间的，所以没有虚拟地址。这时候就需要函数来将一个物理页映射到内核地址空间里面，得到一个逻辑地址。</p>
+<h3 id="永久映射"><a href="#永久映射" class="headerlink" title="永久映射"></a>永久映射</h3><figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">void</span>* <span class="title">kmap</span><span class="params">(struct page* page)</span></span></span><br></pre></td></tr></table></figure>
+
+<p>这个函数在高端内存和低端内存上都能使用。如果 page 对应的是一个低端内存，那么直接返回其虚拟地址就行了（物理地址+3G，寻址不用页表）；如果是高端内存，那么首先会建立一个永久映射（寻址的时候使用页表），再返回虚拟地址。<strong>这个函数是可以睡眠的，所以只能用在进程上下文中。</strong> </p>
+<p>但是就如我们之前曾提到的，内核的 1G 内核地址空间，实际上是需要管理整个内存的，所以并不是所有的内存都可以永久映射到内核地址空间。当不再需要高端内存的时候应该解除映射关系，通过下面的函数实现：</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">void</span> <span class="title">kunmap</span><span class="params">(struct page* page)</span></span></span><br></pre></td></tr></table></figure>
+
+<p>其实前面的 <a href="#permanentkernelmapping">永久内核映射</a> 曾详细说过。</p>
+<h3 id="临时映射"><a href="#临时映射" class="headerlink" title="临时映射"></a>临时映射</h3><figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">void</span>* <span class="title">kmap_atomic</span><span class="params">(struct page* page, <span class="keyword">enum</span> km_type type)</span></span></span><br><span class="line"><span class="function"><span class="comment">//type 参数会描述临时映射的目的</span></span></span><br></pre></td></tr></table></figure>
+
+<p>临时映射和永久映射的一个最本质区别在于，临时映射是不能睡眠的，而永久映射可以睡眠。</p>
+<p>内核空间的内存，在高端内存区域，前面曾说过还细分成了三部分：vmalloc area、持久内核映射区、临时内核映射区。这三个区内核都为其预留了映射地址的，上面的永久映射只会被映射到该区对应的逻辑地址空间里面，同理，临时映射也是只会映射到这个区域。</p>
+<p>临时映射不能睡眠，所以用在不能睡眠的地方，例如中断处理程序以及其他不能重新调度的地方。这个函数还会禁止内核抢占。取消映射使用下面的函数：</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">void</span> <span class="title">kunmap_atomic</span><span class="params">(<span class="keyword">void</span>* kvaddr, <span class="keyword">enum</span> km_type type)</span></span></span><br></pre></td></tr></table></figure>
+
+<p>取消映射的接口也是非阻塞的（不可睡眠），其实这个函数一般而言是什么事情都没有做的，因为下一个临时映射的页会覆盖掉上一个映射的页。</p>
+<p>其实前面的 <a href="#temporarykernelmapping">临时内核映射</a> 曾详细说过。</p>
+<h2 id="每个-CPU-的分配"><a href="#每个-CPU-的分配" class="headerlink" title="每个 CPU 的分配"></a>每个 CPU 的分配</h2><p>在 SMP 体系结构上，一般会对一些处理器数据用数组的方式来管理，每个处理器对应的数据就是在那个数组里面，以处理器编号为下标对应的数据。然后在使用这些数据的时候，先过去当前处理器编号，禁止内核抢占（避免进入相同代码修改本处理器的数据），然后从那个数组里面获取数据，使用完之后，恢复内核抢占。</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">int</span> per_cpu_data[NR_CPUS];</span><br><span class="line">...</span><br><span class="line"><span class="keyword">int</span> cpu = get_cpu();    <span class="comment">//获取当前处理器编号，并禁止内核抢占</span></span><br><span class="line">per_cpu_data[cpu]++;    <span class="comment">//处理处理器对应的数据</span></span><br><span class="line">put_cpu();              <span class="comment">//激活内核抢占</span></span><br><span class="line">...</span><br></pre></td></tr></table></figure>
+
+<h2 id="新的每个-CPU-接口"><a href="#新的每个-CPU-接口" class="headerlink" title="新的每个 CPU 接口"></a>新的每个 CPU 接口</h2><h3 id="编译时-percpu-数据"><a href="#编译时-percpu-数据" class="headerlink" title="编译时 percpu 数据"></a>编译时 percpu 数据</h3><table>
+<thead>
+<tr>
+<th>接口</th>
+<th>描述</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>DEFINE_PER_CPU(type,name)</td>
+<td>定义编译时 percpu 数据。该语句为系统中每个 CPU 创建一个类型为 type，名字为 name 的变量实例</td>
+</tr>
+<tr>
+<td>DECLARE_PER_CPU(type,name)</td>
+<td>对上面定义的 percpu 变量，在别的地方进行声明</td>
+</tr>
+<tr>
+<td>get_cpu_var(name)</td>
+<td>该函数返回当前处理器上名为 name 的 percpu 数据，同时禁止内核抢占</td>
+</tr>
+<tr>
+<td>put_cpu_var(name)</td>
+<td>重新激活内核抢占</td>
+</tr>
+<tr>
+<td>per_cpu(name,cpu)</td>
+<td>返回指定处理器上名为 name 的 percpu <strong>变量</strong>，<strong>但是不会禁止内核抢占</strong></td>
+</tr>
+</tbody></table>
+<p><strong>注意：编译时的 percpu 数据不能在模块中使用。</strong> </p>
+<h3 id="运行时-percpu-数据"><a href="#运行时-percpu-数据" class="headerlink" title="运行时 percpu 数据"></a>运行时 percpu 数据</h3><table>
+<thead>
+<tr>
+<th>接口</th>
+<th>描述</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>void* alloc_percpu(type)</td>
+<td><em>_alloc_percpu( sizeof(type), __alignof_\</em>(type) )</td>
+</tr>
+<tr>
+<td>void* __alloc_percpu(size_t size, size_t align)</td>
+<td>第一个参数：动态创建的 percpu 变量的大小（单位字节）；第二个参数：分配时的字节对齐</td>
+</tr>
+<tr>
+<td>void free_percpu(const void*)</td>
+<td>释放所有处理器上的 percpu 变量</td>
+</tr>
+<tr>
+<td>get_cpu_ptr(void* ptr)</td>
+<td>该函数返回指向当前处理器上名为 name 的 percpu 数据的<strong>指针</strong>，同时禁止内核抢占</td>
+</tr>
+<tr>
+<td>put_cpu_ptr(void* ptr)</td>
+<td>重新激活内核抢占</td>
+</tr>
+</tbody></table>
+<p>上面的内容中需要注意一些点，同时我在阅读 linux 源码的时候，发现一些现象也一并记录于下</p>
+<ol>
+<li><em>_alignof_\</em> 是 gcc 的一个功能，返回一个类型或左值的对齐字节数。</li>
+<li>对于使用 DEFINE_PER_CPU(type,name) 而定义的 percpu 数据，大多使用 per_cpu(name,cpu) 来操作；</li>
+<li>对于运行时的 percpu 数据，大多使用 get_cpu_ptr() 来操作。</li>
+</ol>
+<h2 id="为啥要使用-percpu-数据？"><a href="#为啥要使用-percpu-数据？" class="headerlink" title="为啥要使用 percpu 数据？"></a>为啥要使用 percpu 数据？</h2><ol>
+<li><strong>减少数据锁定，提升系统性能</strong> 。只要能保证那些 percpu 处理器数据只能被一个处理器访问，那么就不需要锁，只需要禁止内核抢占就行了。</li>
+<li><strong>大大减少缓存失效。</strong> 缓存失效发生在处理器试图使他们的缓存保持同步时。如果一个处理器操作的数据存放在别的处理器的缓存上，那么当这个处理器要处理这个数据的时候，现在保存这个数据的处理器要么清除要么刷新自己的缓存，当时如果保证了数据只出现在某个处理器的缓存上，那么就不会有这种缓存失效的问题。（持续不断的缓存失效被称为缓存抖动）</li>
+</ol>
+<h2 id="分配函数选择"><a href="#分配函数选择" class="headerlink" title="分配函数选择"></a>分配函数选择</h2><table>
+<thead>
+<tr>
+<th>分配方式</th>
+<th>场景</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>低级页分配器 或 kmalloc()</td>
+<td>需要连续物理页；注意，在不可睡眠场景，使用标志 GFP_ATOMIC，其余一般场景，可以使用 GFP_KERNEL</td>
+</tr>
+<tr>
+<td>kmap(alloc_pages(gfp_mask,order))</td>
+<td>需要从高端内存分配</td>
+</tr>
+<tr>
+<td>vmalloc()</td>
+<td>不需要物理上连续的页</td>
+</tr>
+<tr>
+<td>slab</td>
+<td>频繁的请求和释放相同对象</td>
+</tr>
+</tbody></table>
+
+        </div>
+
+        
+            <section class="post-copyright">
+                
+                    <p class="copyright-item">
+                        <span>Author:</span>
+                        <span>LouisozZ</span>
+                    </p>
+                
+                
+                    <p class="copyright-item">
+                        <span>Permalink:</span>
+                        <span><a href="http://louisozz.github.io/post/2019/linux内核设计与实现/第12章-内存管理/">http://louisozz.github.io/post/2019/linux内核设计与实现/第12章-内存管理/</a></span>
+                    </p>
+                
+                
+                    <p class="copyright-item">
+                        <span>License:</span>
+                        <span>Copyright (c) 2019 <a href="http://creativecommons.org/licenses/by-nc/4.0/">CC-BY-NC-4.0</a> LICENSE</span>
+                    </p>
+                
+                
+                     <p class="copyright-item">
+                         <span>Slogan:</span>
+                         <span>Do you believe in <strong>DESTINY<strong>?</strong></strong></span>
+                     </p>
+                
+
+            </section>
+        
+        <section class="post-tags">
+            <div>
+                <span>Tag(s):</span>
+                <span class="tag">
+                    
+                    
+                        <a href="/tags/linux/"># linux</a>
+                    
+                        
+                </span>
+            </div>
+            <div>
+                <a href="javascript:window.history.back();">back</a>
+                <span>· </span>
+                <a href="/">home</a>
+            </div>
+        </section>
+        <section class="post-nav">
+            
+                <a class="prev" rel="prev" href="/post/2019/linux内核设计与实现/第13章-虚拟文件系统/">《Linux内核设计与实现》/第13章-虚拟文件系统</a>
+            
+            
+            <a class="next" rel="next" href="/post/2019/linux内核设计与实现/第11章-定时器和时间管理/">《Linux内核设计与实现》/第11章-定时器和时间管理</a>
+            
+        </section>
+
+
+    </article>
+</div>
+
+        </div>
+        <footer id="footer" class="footer">
+    <div class="copyright">
+        <span>© LouisozZ | Powered by <a href="https://hexo.io" target="_blank">Hexo</a> & <a href="https://github.com/Siricee/hexo-theme-Chic" target="_blank">Chic</a></span>
+    </div>
+</footer>
+
+    </div>
+</body>
+</html>
