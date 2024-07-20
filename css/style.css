@@ -616,19 +616,19 @@ header label {
   font-size: 2em;
 }
 .cards-container {
-  display: flex; /* 使用flex布局 */
-  justify-content: center; /* 水平居中排列子元素 */
-  align-items: center; /* 垂直居中对齐子元素 */
-  flex-wrap: wrap; /* 允许子元素换行 */
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  flex-wrap: wrap;
 }
 .card {
-  width: 75px; /* 设置每个内部容器的宽度 */
-  margin: 100px 30px 0px; /* 设置容器之间的间距 */
-  text-align: center; /* 使图片描述文本居中 */
+  width: 75px;
+  margin: 100px 30px 0px;
+  text-align: center;
 }
 .square-image {
-  width: 100%; /* 图片宽度自适应容器宽度 */
-  height: auto; /* 高度自动，保持图片比例 */
+  width: 100%;
+  height: auto;
   margin: 0px;
 }
 .image-description {
